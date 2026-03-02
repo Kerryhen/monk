@@ -39,7 +39,7 @@ pre_format = 'ruff check --fix'
 format = 'ruff format'
 run = 'fastapi dev app/main.py'
 pre_test = 'task format'
-test = 'pytest -s -x --cov=app --cov-report=xml -vv '
+test = 'pytest -s -x --cov=app --cov-report=xml -vv'
 post_test = 'coverage html'
 
 [tool.pdm]
