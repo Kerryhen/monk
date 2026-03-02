@@ -1,13 +1,25 @@
+import logging
 from http import HTTPStatus
 from typing import Annotated
 
 import requests
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pocketbase.errors import ClientResponseError
 
-from app.schemas import CreateListSchema, DeleteListResonseSchema, DeleteListSchema, ListSchema
+from app.schemas import (
+    CreateListSchema,
+    DeleteListResonseSchema,
+    DeleteListSchema,
+    ListSchema,
+    ResponseUpdateListSchema,
+    UpdateListSchema,
+)
 from app.sessions import MonkSession, PocketBaseSession, get_monk_session, get_pocketbase_session
 from app.settings import Settings
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
+logger.warning('Started')
 
 settings = Settings()
 
@@ -18,6 +30,7 @@ router = APIRouter(
 
 Monk = Annotated[MonkSession, Depends(get_monk_session)]
 Pocket = Annotated[PocketBaseSession, Depends(get_pocketbase_session)]
+DeleteListParams = Annotated[DeleteListSchema, Query()]
 
 url_monk = f'{settings.LISTMONK_API_URL}/lists'
 auth_monk = (settings.LISTMONK_USER, settings.LISTMONK_TOKEN)
@@ -65,24 +78,26 @@ def create_list(payload: CreateListSchema, client: str, pb: Pocket):
 
 
 @router.delete('/', status_code=HTTPStatus.OK, response_model=DeleteListResonseSchema)
-def delete_list(payload: DeleteListSchema, pb: Pocket):
+def delete_list(params: DeleteListParams, pb: Pocket):
     try:
-        for _id in payload.id:
+        for _id in params.id:
             pb.client.collection('monk_lists').delete(str(_id))
     except ClientResponseError:
         pass
 
     requests.delete(
         url_monk,
-        params=payload.model_dump(),
+        params=params,
         auth=auth_monk,
         timeout=5,
     )
     return DeleteListResonseSchema(data=True)
 
 
-@router.patch('/{list_id}', response_model=ListSchema)
-def patch_list(list_id: int, list_values: CreateListSchema, pb: Pocket):
-    response = requests.patch(f'{url_monk}/{list_id}', json=list_values.model_dump(), auth=auth_monk, timeout=5)
-    pb.client.collection('monk_lists').update(list_id, list_values)
-    return response
+@router.patch('/{list_id}', response_model=ResponseUpdateListSchema)
+def patch_list(list_id: str, list_values: UpdateListSchema, pb: Pocket):
+    print('>>:', list_id, list_values.model_dump())
+    response = requests.put(f'{url_monk}/{list_id}', json=list_values.model_dump(), auth=auth_monk, timeout=5)
+    print('>>:', response)
+    pb.client.collection('monk_lists').update(list_id, {'name': list_values.name})
+    return ResponseUpdateListSchema(**response.json()['data'])

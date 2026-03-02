@@ -16,6 +16,22 @@ class ListSchema(BaseModel):
     subscriber_count: int
 
 
+class UpdateListSchema(BaseModel):
+    id: Optional[int] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    name: Optional[str] = None
+    type: Optional[str] = None
+    optin: Optional[str] = None
+    status: Optional[str] = None
+    tags: Optional[List[str]] = None
+    description: Optional[str] = None
+
+
+class ResponseUpdateListSchema(BaseModel):
+    data: ListSchema
+
+
 class ListsSchema(BaseModel):
     results: List[ListSchema]
 
@@ -28,11 +44,12 @@ class MonkListsSchema(BaseModel):
 
 
 class CreateListSchema(BaseModel):
+    id: Optional[int] = None
     name: str = Field(..., description='Name of the new list')
     type: Literal['private', 'public']
     optin: Literal['single', 'double']
     status: Literal['active', 'archived'] = 'active'
-    tags: Optional[List[str]] = None
+    tags: Optional[List[str]]  = None
     description: Optional[str] = None
 
 

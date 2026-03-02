@@ -1,4 +1,6 @@
 # tests/conftest.py
+from http import HTTPStatus
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -22,3 +24,28 @@ def override_monk():
     app.dependency_overrides[get_monk_session] = fake_monk
     yield
     app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def list_payload():
+    return {
+        'name': 'Automated Test',
+        'type': 'public',
+        'optin': 'double',
+        'tags': ['marketing', 'email'],
+        'description': 'Automatic generated List',
+    }
+
+
+@pytest.fixture
+def created_list(client, list_payload):
+    response = client.post('/list?client=mxf', json=list_payload)
+    assert response.status_code == HTTPStatus.CREATED
+
+    data = response.json()
+
+    # provide the created list to the test
+    return data
+
+    # automatic cleanup
+    client.delete('/list', params={'id': [data['id']]})
