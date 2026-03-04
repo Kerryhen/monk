@@ -45,7 +45,7 @@ def created_list(client, list_payload):
     data = response.json()
 
     # provide the created list to the test
-    return data
+    yield data
 
     # automatic cleanup
     client.delete('/list', params={'id': [data['id']]})

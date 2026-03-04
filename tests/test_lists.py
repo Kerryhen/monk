@@ -56,14 +56,13 @@ def test_update_list(client, created_list):
         'name': 'Updated Name',
     }
 
-    print('??:', updated_payload)
     response = client.patch(
         f'/list/{created_list["id"]}',
         json=updated_payload,
     )
 
     assert response.status_code == HTTPStatus.OK
-    assert response.json()['name'] == 'Updated Name'
+    assert response.json()['data']['name'] == 'Updated Name'
 
 
 # @pytest.mark.skip(reason='OldVersion')

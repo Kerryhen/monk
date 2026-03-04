@@ -2,6 +2,7 @@
 import secrets
 from dataclasses import dataclass
 
+import requests
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pocketbase import PocketBase
@@ -61,3 +62,50 @@ class PocketBaseSession:
 
 def get_pocketbase_session(admin: bool = True) -> PocketBaseSession:
     return PocketBaseSession(admin=admin)
+
+
+class Monk:
+    def __init__(self, auth_creds, url, timeout=5):
+        self.__creds = auth_creds
+        self.__url = url
+        self.timeout = 5
+
+    def delete(self, params):
+        return requests.delete(
+            self.__url,
+            params=params,
+            auth=self.__creds,
+            timeout=self.timeout,
+        )
+
+    def post(self, params):
+        return requests.post(
+            self.__url,
+            json=params,
+            auth=self.__creds,
+            timeout=self.timeout,
+        )
+
+    def put(self, params, path=None):
+        return requests.put(
+            self.__url + path,
+            json=params,
+            auth=self.__creds,
+            timeout=self.timeout,
+        )
+
+    def patch(self, params):
+        return requests.patch(
+            self.__url,
+            params=params,
+            auth=self.__creds,
+            timeout=self.timeout,
+        )
+
+    def get(self, params):
+        return requests.get(
+            self.__url,
+            params=params,
+            auth=self.__creds,
+            timeout=self.timeout,
+        )
