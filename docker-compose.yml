@@ -1,0 +1,123 @@
+x-listmonk_db-credentials: &listmonk_db-credentials                             # Use the default POSTGRES_ credentials if they're available or simply default to "listmonk"
+  POSTGRES_USER: &db-user ${POSTGRES_USER}                            # for database user, password, and database name
+  POSTGRES_PASSWORD: &db-password ${POSTGRES_PASSWORD}
+  POSTGRES_DB: &db-name ${POSTGRES_DB}
+
+services:
+
+  api:
+    image: campaing_api:latest
+    build:
+      context: ./services/api
+    environment:
+      - LISTMONK_USER=${LISTMONK_USER}
+      - LISTMONK_TOKEN=${LISTMONK_TOKEN}
+      - LISTMONK_API_URL=${LISTMONK_API_URL}
+      - POCKETBASE_BOT_EMAIL=${POCKETBASE_BOT_EMAIL}
+      - POCKETBASE_BOT_PASSWORD=${POCKETBASE_BOT_PASSWORD}
+      - POCKETBASE_API_URL=${POCKETBASE_API_URL}
+    ports:
+      - 8000:8000
+    develop:
+      watch:
+        - action: sync
+          path: ./services/api/app
+          target: /services/api/app
+        - action: sync
+          path: ./services/api/tests
+          target: /services/api/tests
+        - action: rebuild
+          path: ./services/api/Dockerfile
+        - action: rebuild
+          path: ./services/api/pdm.lock
+
+    networks:
+      - bridge
+    
+  pocketbase:
+    image: ghcr.io/muchobien/pocketbase:latest
+    restart: unless-stopped
+    command:
+      - --encryptionEnv
+      - ENCRYPTION
+    environment:
+      - ENCRYPTION=${ENCRYPTION}
+      - PB_INVITATION_PEPPER=${PB_INVITATION_PEPPER}
+      - N8N_WEBHOOK_URL=${N8N_WEBHOOK_URL}
+      - N8N_WEBHOOK_SECRET=${N8N_WEBHOOK_SECRET}
+      - ENVIROMENT=${ENVIROMENT}
+    ports:
+      - 8090:8090
+    volumes:
+      - pocketbase:/pb_data
+    healthcheck:
+      test: wget --no-verbose --tries=1 --spider http://localhost:8090/api/health || exit 1
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - bridge
+  
+  listmonk_app:
+    image: listmonk/listmonk:latest
+    container_name: listmonk_app
+    restart: unless-stopped
+    ports:
+      - 9000:9000                                           # To change the externally exposed port, change to: $custom_port:9000
+    networks:
+      - bridge
+    hostname: listmonk.ailian.com.br                            # Recommend using FQDN for hostname
+    depends_on:
+      - listmonk_db
+    command: [sh, -c, "./listmonk --install --idempotent --yes --config '' && ./listmonk --upgrade --yes --config '' && ./listmonk --config ''"]
+                                                              # --config (file) param is set to empty so that listmonk only uses the env vars (below) for config.
+                                                              # --install --idempotent ensures that DB installation happens only once on an empty DB, on the first ever start.
+                                                              # --upgrade automatically runs any DB migrations when a new image is pulled.
+
+    environment:                                              # The same params as in config.toml are passed as env vars here.
+      LISTMONK_app__address: ${LISTMONK_APP_ADDRESS}
+      LISTMONK_db__user: ${LISTMONK_DB_USER}
+      LISTMONK_db__password: ${LISTMONK_DB_PASSWORD}
+      LISTMONK_db__database: ${LISTMONK_DB_DATABSE}
+      LISTMONK_db__host: ${LISTMONK_DB_HOST}
+      LISTMONK_db__port: ${LISTMONK_DB_PORT}
+      LISTMONK_db__ssl_mode: ${LISTMONK_DB_SSL_MODE}
+      LISTMONK_db__max_open: ${LISTMONK_DB_MAX_OPEN}
+      LISTMONK_db__max_idle: ${LISTMONK_DB_MAX_IDLE}
+      LISTMONK_db__max_lifetime: ${LISTMONK_DB_MAX_LIFETIME}
+      TZ: Etc/UTC
+      LISTMONK_ADMIN_USER: ${LISTMONK_ADMIN_USER:-}           # If these (optional) are set during the first `docker compose up`, then the Super Admin user is automatically created.
+      LISTMONK_ADMIN_PASSWORD: ${LISTMONK_ADMIN_PASSWORD:-}   # Otherwise, the user can be setup on the web app after the first visit to http://localhost:9000
+    volumes:
+      - ./uploads:/listmonk/uploads:rw                        # Mount an uploads directory on the host to /listmonk/uploads inside the container.
+                                                              # To use this, change directory path in Admin -> Settings -> Media to /listmonk/uploads
+ 
+  listmonk_db:
+    image: postgres:17-alpine
+    container_name: listmonk_db
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5432:5432"                                 # Only bind on the local interface. To connect to Postgres externally, change this to 0.0.0.0
+    networks:
+      - bridge
+    environment:
+      <<: *listmonk_db-credentials
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U listmonk"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    volumes:
+      - type: volume
+        source: listmonk-data
+        target: /var/lib/postgresql/data
+
+networks:
+  bridge:
+
+volumes:
+  claude_enviroment:
+    external: true
+  pocketbase:
+  listmonk-data:
+
