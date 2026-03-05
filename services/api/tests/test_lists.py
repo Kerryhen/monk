@@ -47,7 +47,7 @@ def test_create_list(client, list_payload):
     assert data['tags'] == list_payload['tags']
 
     # cleanup for this standalone test
-    client.delete('/list', params={'id': [data['id']]})
+    client.delete('/list', params={'id': [data['id']], 'client': 'mxf'})
 
 
 # @pytest.mark.skip(reason='OldVersion')
@@ -57,7 +57,7 @@ def test_update_list(client, created_list):
     }
 
     response = client.patch(
-        f'/list/{created_list["id"]}',
+        f'/list/{created_list["id"]}?client=mxf',
         json=updated_payload,
     )
 
@@ -69,7 +69,7 @@ def test_update_list(client, created_list):
 def test_delete_list(client, created_list):
     response = client.delete(
         '/list',
-        params={'id': [created_list['id']]},
+        params={'id': [created_list['id']], 'client': 'mxf'},
     )
 
     assert response.status_code == HTTPStatus.OK

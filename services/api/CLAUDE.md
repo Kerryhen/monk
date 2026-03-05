@@ -48,7 +48,7 @@
 
      ### Request Flow
 
-     Incoming API requests → FastAPI router → `Interface` class (`app/routers/__init__.py`) → both Listmonk API and PocketBase are updated in sync.
+     Incoming API requests → FastAPI router → `Interface` class (`app/interface.py`) → both Listmonk API and PocketBase are updated in sync.
 
      The `Interface` class is the core business logic layer. It coordinates writes to both backends, e.g. creating a list in Listmonk and then recording the association in
      PocketBase's `monk_lists` and `monk_client_lists` collections.
@@ -71,7 +71,7 @@
 
      ### Key Files
 
-     - `app/routers/__init__.py` — `Interface` class with all business logic; `Monk` HTTP client instance (singleton); `get_interface_api()` dependency.
+     - `app/interface.py` — `Interface` class with all business logic; `Monk` HTTP client instance (singleton); `get_interface_api()` dependency.
      - `app/sessions.py` — Auth dependencies and the `Monk` HTTP wrapper.
      - `app/schemas.py` — Pydantic schemas for all request/response bodies.
      - `tests/conftest.py` — `get_monk_session` is overridden to bypass auth in tests; integration tests hit real Listmonk and PocketBase instances.

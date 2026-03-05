@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 
 from app.interface import interface
 from app.main import app
-from app.schemas import CreateListSchema, DeleteListSchema
+from app.schemas import ClientSchema, CreateListSchema, DeleteListSchema, LM_CreateListSchema
 from app.sessions import MonkSession, get_monk_session
 from app.settings import Settings
 
@@ -39,7 +39,10 @@ def list_payload():
 
 @pytest.fixture
 def created_list(list_payload):
-    payload = CreateListSchema(**list_payload)
-    list_obj = interface.create_list(payload, 'mxf')
+    payload = CreateListSchema(
+        client=ClientSchema(id='mxf'),
+        list=LM_CreateListSchema(**list_payload),
+    )
+    list_obj = interface.create_list(payload)
     yield list_obj.model_dump()
-    interface.delete_list(DeleteListSchema(id=[list_obj.id]))
+    interface.delete_list(DeleteListSchema(client=ClientSchema(id='mxf'), id=[list_obj.id]))

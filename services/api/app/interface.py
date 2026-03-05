@@ -5,7 +5,14 @@ import requests
 from fastapi import Depends, HTTPException
 from pocketbase.errors import ClientResponseError
 
-from app.schemas import CreateListSchema, DeleteListResonseSchema, ListSchema, ResponseUpdateListSchema
+from app.schemas import (
+    CreateListSchema,
+    DeleteListSchema,
+    DeleteResponseSchema,
+    ListSchema,
+    ResponseUpdateListSchema,
+    UpdateListSchema,
+)
 from app.sessions import Monk, PocketBaseSession, get_pocketbase_session
 from app.settings import Settings
 
@@ -22,7 +29,8 @@ class Interface:
         self.__monk = monk
         self.__pb = pb
 
-    def create_list(self, payload: CreateListSchema, client: str) -> ListSchema:
+    def create_list(self, payload: CreateListSchema) -> ListSchema:
+        client = payload.client.id
         list_result = self.__pb.client.collection('monk_client_lists').get_list(1, 1, {'filter': f'client="{client}"'})
         items, total = list_result.items, list_result.total_items
         if total == 0:
@@ -34,7 +42,7 @@ class Interface:
             existing_lists = items[0].lists
 
         try:
-            response = self.__monk.post(payload.model_dump())
+            response = self.__monk.post(payload.list.model_dump())
         except requests.RequestException as e:
             raise HTTPException(
                 status_code=HTTPStatus.SERVICE_UNAVAILABLE,
@@ -51,7 +59,7 @@ class Interface:
     def user_list(self, user_id):
         self.__pb.client.collection('monk_lists').get_list(1, 30, {'filter': f'id="{user_id}"'})
 
-    def delete_list(self, params) -> DeleteListResonseSchema:
+    def delete_list(self, params: DeleteListSchema) -> DeleteResponseSchema:
         for _id in params.id:
             try:
                 result = self.__pb.client.collection('monk_client_lists').get_list(1, 1, {'filter': f'lists ~ "{_id}"'})
@@ -63,13 +71,13 @@ class Interface:
             except ClientResponseError:
                 pass
 
-        self.__monk.delete(params=params.model_dump(exclude_none=True))
+        self.__monk.delete(params=params.model_dump(exclude_none=True, exclude={'client'}))
 
-        return DeleteListResonseSchema(data=True)
+        return DeleteResponseSchema(data=True)
 
-    def update_list(self, list_id, list_values):
+    def update_list(self, list_id, payload: UpdateListSchema) -> ResponseUpdateListSchema:
         response = self.__monk.put(
-            list_values.model_dump(),
+            payload.list.model_dump(),
             path=f'/{list_id}',
         )
 
