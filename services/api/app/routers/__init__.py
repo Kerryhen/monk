@@ -44,7 +44,7 @@ class Interface:
         result = response.json()
         list_id = result['data']['id']
 
-        self.__pb.client.collection('monk_lists').create({'id': list_id, 'name': payload.name, 'owner': client_id})
+        self.__pb.client.collection('monk_lists').create({'id': list_id})
         self.__pb.client.collection('monk_client_lists').update(client_id, {'lists': existing_lists + [list_id]})
 
         return ListSchema(**result['data'])
@@ -53,13 +53,18 @@ class Interface:
         self.__pb.client.collection('monk_lists').get_list(1, 30, {'filter': f'id="{user_id}"'})
 
     def delete_list(self, params) -> DeleteListResonseSchema:
-        try:
-            for _id in params.id:
+        for _id in params.id:
+            try:
+                result = self.__pb.client.collection('monk_client_lists').get_list(1, 1, {'filter': f'lists ~ "{_id}"'})
+                if result.total_items > 0:
+                    owner = result.items[0]
+                    updated_lists = [lid for lid in owner.lists if str(lid) != str(_id)]
+                    self.__pb.client.collection('monk_client_lists').update(owner.id, {'lists': updated_lists})
                 self.__pb.client.collection('monk_lists').delete(str(_id))
-        except ClientResponseError:
-            pass
+            except ClientResponseError:
+                pass
 
-        self.__monk.delete(params=params)
+        self.__monk.delete(params=params.model_dump(exclude_none=True))
 
         return DeleteListResonseSchema(data=True)
 
@@ -69,7 +74,7 @@ class Interface:
             path=f'/{list_id}',
         )
 
-        self.__pb.client.collection('monk_lists').update(list_id, {'name': list_values.name})
+        # monk_lists only stores the id; no extra fields to sync
         return ResponseUpdateListSchema(**response.json())
 
 

@@ -81,3 +81,13 @@
      - Tests are **integration tests** that hit live Listmonk and PocketBase — a `.env` with valid credentials is required to run them.
      - `app/routers/campaing.py` and `app/routers/leads.py` are stubs (not yet wired into `main.py`).
      - Ruff is configured with `preview = true`, single quotes, and 128-char line length.
+
+     ## Code Style
+
+     All code must be idiomatic Python and pass Ruff checks without errors. Key rules to follow:
+
+     - **No ambiguous variable names**: avoid `l`, `O`, `I` as variable names (E741).
+     - **Single quotes** for strings.
+     - **Max line length**: 128 characters.
+     - Run `pdm run task lint` before considering any code change complete. Fix all reported violations — do not suppress them.
+     - Run `pdm run task test` after fix all lints reported violations, and fix all new repoted violations - do not change the tests unless explicited commanded by the owner.
