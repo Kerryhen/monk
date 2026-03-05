@@ -1,3 +1,4 @@
+import json
 from http import HTTPStatus
 from typing import Annotated
 
@@ -24,17 +25,20 @@ from app.settings import Settings
 settings = Settings()
 url_monk = f'{settings.LISTMONK_API_URL}/lists'
 url_monk_campaigns = f'{settings.LISTMONK_API_URL}/campaigns'
+url_monk_subscribers = f'{settings.LISTMONK_API_URL}/import/subscribers'
 auth_monk = (settings.LISTMONK_USER, settings.LISTMONK_TOKEN)
 
 MonkLists = Monk(auth_creds=auth_monk, url=url_monk)
 MonkCampaigns = Monk(auth_creds=auth_monk, url=url_monk_campaigns)
+MonkSubscribers = Monk(auth_creds=auth_monk, url=url_monk_subscribers)
 Pocket = Annotated[PocketBaseSession, Depends(get_pocketbase_session)]
 
 
 class Interface:
-    def __init__(self, monk, monk_campaigns, pb):
+    def __init__(self, monk, monk_campaigns, monk_subscribers, pb):
         self.__monk = monk
         self.__monk_campaigns = monk_campaigns
+        self.__monk_subscribers = monk_subscribers
         self.__pb = pb
 
     # -------------------------------------------------------------------------
@@ -85,7 +89,10 @@ class Interface:
         list_id = result['data']['id']
 
         self.__pb.client.collection('monk_lists').create({'id': list_id})
-        self.__pb.client.collection('monk_client_lists').update(client_id, {'lists': existing_lists + [list_id]})
+        updates = {'lists': existing_lists + [list_id]}
+        if not existing_lists:
+            updates['default_list'] = list_id
+        self.__pb.client.collection('monk_client_lists').update(client_id, updates)
 
         return ListSchema(**result['data'])
 
@@ -181,8 +188,40 @@ class Interface:
         response.raise_for_status()
         return CampaignSchema(**response.json()['data'])
 
+    # -------------------------------------------------------------------------
+    # Subscribers
+    # -------------------------------------------------------------------------
 
-interface = Interface(MonkLists, MonkCampaigns, get_pocketbase_session())
+    def import_subscribers(self, client: ClientSchema, file_bytes: bytes, filename: str) -> dict:
+        result = self.__pb.client.collection('monk_client_lists').get_list(1, 1, {'filter': f'client="{client.id}"'})
+        if result.total_items == 0:
+            raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail=f'Client "{client.id}" not found')
+
+        default_list = result.items[0].default_list
+        if not default_list:
+            raise HTTPException(
+                status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+                detail=f'Client "{client.id}" has no default list',
+            )
+
+        params = json.dumps({
+            'mode': 'subscribe',
+            'subscription_status': 'confirmed',
+            'lists': [int(default_list)],
+            'delim': ',',
+        })
+        try:
+            response = self.__monk_subscribers.post_multipart(
+                files={'file': (filename, file_bytes, 'text/csv')},
+                data={'params': params},
+            )
+        except requests.RequestException as e:
+            raise HTTPException(status_code=HTTPStatus.SERVICE_UNAVAILABLE, detail=f'Could not reach Listmonk API: {e}')
+        response.raise_for_status()
+        return response.json()
+
+
+interface = Interface(MonkLists, MonkCampaigns, MonkSubscribers, get_pocketbase_session())
 
 
 def get_interface_api():

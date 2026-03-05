@@ -87,6 +87,16 @@ class Monk:
             timeout=self.timeout,
         )
 
+    def post_multipart(self, files, data, path=None):
+        url = self.__url + path if path else self.__url
+        return requests.post(
+            url,
+            files=files,
+            data=data,
+            auth=self.__creds,
+            timeout=self.timeout,
+        )
+
     def put(self, params, path=None):
         url = self.__url + path if path else self.__url
         return requests.put(

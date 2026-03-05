@@ -142,6 +142,7 @@ class PB_MonkClientListSchema(BaseModel):
     id: str
     client: str
     lists: List[str]  # list of monk_list IDs
+    default_list: Optional[str] = None
     created: datetime
     updated: datetime
 
