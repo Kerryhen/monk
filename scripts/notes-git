@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Manages local-only CLAUDE.md version history.
+# Usage: ./scripts/notes-git <git-subcommand> [args]
+ROOT="$(git rev-parse --show-toplevel)"
+git --git-dir="$ROOT/.git/claude-history" --work-tree="$ROOT" "$@"
