@@ -2,8 +2,8 @@ from http import HTTPStatus
 
 from fastapi import APIRouter
 
-from . import CreateListSchema, ListSchema
-from . import interface as api
+from app.interface import interface as api
+from app.schemas import CreateListSchema, ListSchema
 
 router = APIRouter(
     prefix='/list',

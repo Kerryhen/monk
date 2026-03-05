@@ -4,6 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 
+from app.interface import Interface, get_interface_api
 from app.schemas import (
     CreateListSchema,
     DeleteListResonseSchema,
@@ -14,8 +15,6 @@ from app.schemas import (
 )
 from app.sessions import PocketBaseSession, get_pocketbase_session
 from app.settings import Settings
-
-from . import Interface, get_interface_api
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)

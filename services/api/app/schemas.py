@@ -10,9 +10,11 @@ class ListSchema(BaseModel):
     updated_at: datetime
     uuid: str
     name: str
+    type: str
     optin: str
     status: str
     tags: List[str]
+    description: Optional[str] = None
     subscriber_count: int
 
 
@@ -44,7 +46,6 @@ class MonkListsSchema(BaseModel):
 
 
 class CreateListSchema(BaseModel):
-    id: Optional[int] = None
     name: str = Field(..., description='Name of the new list')
     type: Literal['private', 'public']
     optin: Literal['single', 'double']
@@ -104,3 +105,17 @@ class MonkCampaingCreate(BaseModel):
 
 class InterfaceCampaingCreate(MonkCampaingCreate):
     lists: List[str] = Field(..., description='List IDs to send campaign to')
+
+
+class PBMonkListSchema(BaseModel):
+    id: str
+    created: datetime
+    updated: datetime
+
+
+class PBMonkClientListSchema(BaseModel):
+    id: str
+    client: str
+    lists: List[str]  # list of monk_list IDs
+    created: datetime
+    updated: datetime
