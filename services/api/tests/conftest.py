@@ -1,10 +1,10 @@
 # tests/conftest.py
-from http import HTTPStatus
-
 import pytest
 from fastapi.testclient import TestClient
 
+from app.interface import interface
 from app.main import app
+from app.schemas import CreateListSchema, DeleteListSchema
 from app.sessions import MonkSession, get_monk_session
 from app.settings import Settings
 
@@ -38,14 +38,8 @@ def list_payload():
 
 
 @pytest.fixture
-def created_list(client, list_payload):
-    response = client.post('/list?client=mxf', json=list_payload)
-    assert response.status_code == HTTPStatus.CREATED
-
-    data = response.json()
-
-    # provide the created list to the test
-    yield data
-
-    # automatic cleanup
-    client.delete('/list', params={'id': [data['id']]})
+def created_list(list_payload):
+    payload = CreateListSchema(**list_payload)
+    list_obj = interface.create_list(payload, 'mxf')
+    yield list_obj.model_dump()
+    interface.delete_list(DeleteListSchema(id=[list_obj.id]))
