@@ -4,7 +4,14 @@ from fastapi.testclient import TestClient
 
 from app.interface import interface
 from app.main import app
-from app.schemas import ClientSchema, CreateListSchema, DeleteListSchema, LM_CreateListSchema
+from app.schemas import (
+    ClientSchema,
+    CreateCampaignSchema,
+    CreateListSchema,
+    DeleteListSchema,
+    LM_CreateCampaignSchema,
+    LM_CreateListSchema,
+)
 from app.sessions import MonkSession, get_monk_session
 from app.settings import Settings
 
@@ -46,3 +53,26 @@ def created_list(list_payload):
     list_obj = interface.create_list(payload)
     yield list_obj.model_dump()
     interface.delete_list(DeleteListSchema(client=ClientSchema(id='mxf'), id=[list_obj.id]))
+
+
+@pytest.fixture
+def campaign_payload(created_list):
+    return {
+        'name': 'Automated Campaign Test',
+        'subject': 'Test Subject',
+        'lists': [created_list['id']],
+        'type': 'regular',
+        'content_type': 'plain',
+        'body': 'Hello, this is a test campaign.',
+    }
+
+
+@pytest.fixture
+def created_campaign(campaign_payload):
+    payload = CreateCampaignSchema(
+        client=ClientSchema(id='mxf'),
+        campaign=LM_CreateCampaignSchema(**campaign_payload),
+    )
+    campaign_obj = interface.create_campaign(payload)
+    yield campaign_obj.model_dump()
+    interface.delete_campaign(campaign_obj.id, ClientSchema(id='mxf'))

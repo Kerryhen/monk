@@ -6,11 +6,16 @@ from fastapi import Depends, HTTPException
 from pocketbase.errors import ClientResponseError
 
 from app.schemas import (
+    CampaignSchema,
+    ClientSchema,
+    CreateCampaignSchema,
     CreateListSchema,
     DeleteListSchema,
     DeleteResponseSchema,
     ListSchema,
+    ResponseCampaignSchema,
     ResponseUpdateListSchema,
+    UpdateCampaignSchema,
     UpdateListSchema,
 )
 from app.sessions import Monk, PocketBaseSession, get_pocketbase_session
@@ -18,16 +23,44 @@ from app.settings import Settings
 
 settings = Settings()
 url_monk = f'{settings.LISTMONK_API_URL}/lists'
+url_monk_campaigns = f'{settings.LISTMONK_API_URL}/campaigns'
 auth_monk = (settings.LISTMONK_USER, settings.LISTMONK_TOKEN)
 
-Monk = Monk(auth_creds=auth_monk, url=url_monk)
+MonkLists = Monk(auth_creds=auth_monk, url=url_monk)
+MonkCampaigns = Monk(auth_creds=auth_monk, url=url_monk_campaigns)
 Pocket = Annotated[PocketBaseSession, Depends(get_pocketbase_session)]
 
 
 class Interface:
-    def __init__(self, monk, pb):
+    def __init__(self, monk, monk_campaigns, pb):
         self.__monk = monk
+        self.__monk_campaigns = monk_campaigns
         self.__pb = pb
+
+    # -------------------------------------------------------------------------
+    # Helpers
+    # -------------------------------------------------------------------------
+
+    def _get_client_list_ids(self, client_id: str) -> list[str]:
+        result = self.__pb.client.collection('monk_client_lists').get_list(1, 1, {'filter': f'client="{client_id}"'})
+        if result.total_items == 0:
+            raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail=f'Client "{client_id}" not found')
+        return [str(lid) for lid in result.items[0].lists]
+
+    def _get_campaign_raw(self, campaign_id: int) -> dict:
+        response = self.__monk_campaigns.get({}, path=f'/{campaign_id}')
+        response.raise_for_status()
+        return response.json()['data']
+
+    def _verify_campaign_ownership(self, campaign: dict, client_id: str) -> None:
+        client_list_ids = self._get_client_list_ids(client_id)
+        campaign_list_ids = [str(lst['id']) for lst in campaign.get('lists', [])]
+        if not any(lid in client_list_ids for lid in campaign_list_ids):
+            raise HTTPException(status_code=HTTPStatus.FORBIDDEN, detail='Campaign does not belong to client')
+
+    # -------------------------------------------------------------------------
+    # Lists
+    # -------------------------------------------------------------------------
 
     def create_list(self, payload: CreateListSchema) -> ListSchema:
         client = payload.client.id
@@ -84,8 +117,72 @@ class Interface:
         # monk_lists only stores the id; no extra fields to sync
         return ResponseUpdateListSchema(**response.json())
 
+    # -------------------------------------------------------------------------
+    # Campaigns
+    # -------------------------------------------------------------------------
 
-interface = Interface(Monk, get_pocketbase_session())
+    def create_campaign(self, payload: CreateCampaignSchema) -> CampaignSchema:
+        client_list_ids = self._get_client_list_ids(payload.client.id)
+        for list_id in payload.campaign.lists:
+            if str(list_id) not in client_list_ids:
+                raise HTTPException(
+                    status_code=HTTPStatus.FORBIDDEN,
+                    detail=f'List {list_id} does not belong to client "{payload.client.id}"',
+                )
+
+        try:
+            response = self.__monk_campaigns.post(payload.campaign.model_dump())
+        except requests.RequestException as e:
+            raise HTTPException(
+                status_code=HTTPStatus.SERVICE_UNAVAILABLE,
+                detail=f'Could not reach Listmonk API: {e}',
+            )
+        response.raise_for_status()
+        return CampaignSchema(**response.json()['data'])
+
+    def get_campaigns(self, client: ClientSchema) -> list[CampaignSchema]:
+        client_list_ids = self._get_client_list_ids(client.id)
+
+        response = self.__monk_campaigns.get({'page': 1, 'per_page': 500})
+        response.raise_for_status()
+        all_campaigns = response.json()['data']['results'] or []
+
+        filtered = [
+            CampaignSchema(**c) for c in all_campaigns if any(str(lst['id']) in client_list_ids for lst in c.get('lists', []))
+        ]
+        return filtered
+
+    def update_campaign(self, campaign_id: int, payload: UpdateCampaignSchema) -> ResponseCampaignSchema:
+        campaign = self._get_campaign_raw(campaign_id)
+        self._verify_campaign_ownership(campaign, payload.client.id)
+
+        # Listmonk PUT requires a full body; merge current state with the requested changes.
+        # The GET response returns `lists` as [{id, name, ...}] objects; PUT expects [id] integers.
+        merged = {**campaign, **payload.campaign.model_dump(exclude_none=True)}
+        merged['lists'] = [lst['id'] if isinstance(lst, dict) else lst for lst in merged['lists']]
+
+        response = self.__monk_campaigns.put(merged, path=f'/{campaign_id}')
+        response.raise_for_status()
+        return ResponseCampaignSchema(data=CampaignSchema(**response.json()['data']))
+
+    def delete_campaign(self, campaign_id: int, client: ClientSchema) -> DeleteResponseSchema:
+        campaign = self._get_campaign_raw(campaign_id)
+        self._verify_campaign_ownership(campaign, client.id)
+
+        response = self.__monk_campaigns.delete({}, path=f'/{campaign_id}')
+        response.raise_for_status()
+        return DeleteResponseSchema(data=True)
+
+    def set_campaign_status(self, campaign_id: int, status: str, client: ClientSchema) -> CampaignSchema:
+        campaign = self._get_campaign_raw(campaign_id)
+        self._verify_campaign_ownership(campaign, client.id)
+
+        response = self.__monk_campaigns.post({'status': status}, path=f'/{campaign_id}/status')
+        response.raise_for_status()
+        return CampaignSchema(**response.json()['data'])
+
+
+interface = Interface(MonkLists, MonkCampaigns, get_pocketbase_session())
 
 
 def get_interface_api():

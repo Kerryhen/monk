@@ -69,25 +69,28 @@ class Monk:
         self.__url = url
         self.timeout = 5
 
-    def delete(self, params):
+    def delete(self, params, path=None):
+        url = self.__url + path if path else self.__url
         return requests.delete(
-            self.__url,
+            url,
             params=params,
             auth=self.__creds,
             timeout=self.timeout,
         )
 
-    def post(self, params):
+    def post(self, params, path=None):
+        url = self.__url + path if path else self.__url
         return requests.post(
-            self.__url,
+            url,
             json=params,
             auth=self.__creds,
             timeout=self.timeout,
         )
 
     def put(self, params, path=None):
+        url = self.__url + path if path else self.__url
         return requests.put(
-            self.__url + path,
+            url,
             json=params,
             auth=self.__creds,
             timeout=self.timeout,
@@ -101,9 +104,10 @@ class Monk:
             timeout=self.timeout,
         )
 
-    def get(self, params):
+    def get(self, params, path=None):
+        url = self.__url + path if path else self.__url
         return requests.get(
-            self.__url,
+            url,
             params=params,
             auth=self.__creds,
             timeout=self.timeout,

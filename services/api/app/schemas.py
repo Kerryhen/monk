@@ -208,8 +208,49 @@ class DeleteResponseSchema(BaseModel):
     data: bool
 
 
+class LM_UpdateCampaignSchema(LM_CampaignSchema):
+    """Listmonk PUT /campaigns/{id} — all fields optional."""
+
+    id: Optional[int] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    uuid: Optional[str] = None
+    name: Optional[str] = None
+    subject: Optional[str] = None
+    from_email: Optional[str] = None
+    type: Optional[str] = None
+    content_type: Optional[str] = None
+    status: Optional[str] = None
+    body: Optional[str] = None
+    to_send: Optional[int] = None
+    sent: Optional[int] = None
+    views: Optional[int] = None
+    clicks: Optional[int] = None
+    messenger: Optional[str] = None
+    lists: Optional[List[Dict[str, Any]]] = None
+
+
 class CreateCampaignSchema(BaseModel):
     """Request to create a campaign."""
 
     client: ClientSchema
     campaign: LM_CreateCampaignSchema
+
+
+class CampaignSchema(LM_CampaignSchema):
+    """Our API's campaign response object."""
+
+    pass
+
+
+class UpdateCampaignSchema(BaseModel):
+    """Request to partially update a campaign."""
+
+    client: ClientSchema
+    campaign: LM_UpdateCampaignSchema
+
+
+class ResponseCampaignSchema(BaseModel):
+    """Response schema for campaign create/update operations."""
+
+    data: CampaignSchema

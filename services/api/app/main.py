@@ -3,13 +3,14 @@ from fastapi.middleware.cors import CORSMiddleware
 
 # from fastapi.staticfiles import StaticFiles
 # from fastapi.responses import FileResponse, HTMLResponse
-from .routers import lists
+from .routers import campaign, lists
 from .settings import Settings
 
 settings = Settings()
 app = FastAPI()
 
 app.include_router(lists.router)
+app.include_router(campaign.router)
 
 app.add_middleware(
     CORSMiddleware,
