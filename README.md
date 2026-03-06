@@ -138,3 +138,7 @@ Maps a client to its owned lists.
 | `services/api/app/schemas.py` | Pydantic request/response schemas |
 | `services/api/app/routers/lists.py` | List CRUD endpoints |
 | `services/pocketbase/pb_schema.json` | PocketBase collection schema |
+
+## Further Reading
+
+- [Messenger Handlers](services/api/docs/messenger-handlers.md) — how the messenger gateway works and how to add a new delivery integration
