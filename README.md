@@ -142,3 +142,4 @@ Maps a client to its owned lists.
 ## Further Reading
 
 - [Messenger Handlers](services/api/docs/messenger-handlers.md) — how the messenger gateway works and how to add a new delivery integration
+- [Observability](services/api/docs/observability.md) — logging conventions, structured fields, and the OpenTelemetry migration path
