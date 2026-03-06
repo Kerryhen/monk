@@ -56,11 +56,12 @@ class Interface:
         response.raise_for_status()
         return response.json()['data']
 
-    def _verify_campaign_ownership(self, campaign: dict, client_id: str) -> None:
+    def _verify_campaign_ownership(self, campaign: dict, client_id: str) -> list[str]:
         client_list_ids = self._get_client_list_ids(client_id)
         campaign_list_ids = [str(lst['id']) for lst in campaign.get('lists', [])]
         if not any(lid in client_list_ids for lid in campaign_list_ids):
             raise HTTPException(status_code=HTTPStatus.FORBIDDEN, detail='Campaign does not belong to client')
+        return client_list_ids
 
     # -------------------------------------------------------------------------
     # Lists
@@ -161,7 +162,16 @@ class Interface:
 
     def update_campaign(self, campaign_id: int, payload: UpdateCampaignSchema) -> ResponseCampaignSchema:
         campaign = self._get_campaign_raw(campaign_id)
-        self._verify_campaign_ownership(campaign, payload.client.id)
+        client_list_ids = self._verify_campaign_ownership(campaign, payload.client.id)
+
+        if payload.campaign.lists is not None:
+            for lst in payload.campaign.lists:
+                list_id = str(lst['id'] if isinstance(lst, dict) else lst)
+                if list_id not in client_list_ids:
+                    raise HTTPException(
+                        status_code=HTTPStatus.FORBIDDEN,
+                        detail=f'List {list_id} does not belong to client "{payload.client.id}"',
+                    )
 
         # Listmonk PUT requires a full body; merge current state with the requested changes.
         # The GET response returns `lists` as [{id, name, ...}] objects; PUT expects [id] integers.
