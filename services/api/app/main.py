@@ -3,8 +3,11 @@ from fastapi.middleware.cors import CORSMiddleware
 
 # from fastapi.staticfiles import StaticFiles
 # from fastapi.responses import FileResponse, HTMLResponse
+from .logging_config import configure_logging
 from .routers import campaign, leads, lists, messenger
 from .settings import Settings
+
+configure_logging()
 
 settings = Settings()
 app = FastAPI()

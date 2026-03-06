@@ -1,4 +1,5 @@
 # app/sessions.py
+import logging
 import secrets
 from dataclasses import dataclass
 
@@ -8,6 +9,8 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pocketbase import PocketBase
 
 from app.settings import Settings
+
+logger = logging.getLogger(__name__)
 
 settings = Settings()
 
@@ -28,6 +31,7 @@ def get_monk_session(
         secrets.compare_digest(credentials.username, settings.LISTMONK_USER)
         and secrets.compare_digest(credentials.password, settings.LISTMONK_TOKEN)
     ):
+        logger.warning('auth.invalid_credentials', extra={'username': credentials.username})
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail='Invalid authentication credentials',
@@ -53,9 +57,11 @@ class PocketBaseSession:
                     settings.POCKETBASE_BOT_EMAIL, settings.POCKETBASE_BOT_PASSWORD
                 )
         except Exception as e:
+            logger.error('pocketbase.auth_failed', extra={'error': str(e)})
             raise HTTPException(status_code=503, detail=f'PocketBase auth failed: {e}')
 
         if not self.auth_data.is_valid:
+            logger.error('pocketbase.token_invalid')
             raise HTTPException(status_code=401, detail='PocketBase token invalid')
 
 

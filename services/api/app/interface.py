@@ -1,4 +1,5 @@
 import json
+import logging
 from http import HTTPStatus
 from typing import Annotated
 
@@ -21,6 +22,8 @@ from app.schemas import (
 )
 from app.sessions import Monk, PocketBaseSession, get_pocketbase_session
 from app.settings import Settings
+
+logger = logging.getLogger(__name__)
 
 settings = Settings()
 url_monk = f'{settings.LISTMONK_API_URL}/lists'
@@ -82,6 +85,7 @@ class Interface:
         try:
             response = self.__monk.post(payload.list.model_dump())
         except requests.RequestException as e:
+            logger.error('create_list.unreachable', extra={'client': client, 'error': str(e)})
             raise HTTPException(
                 status_code=HTTPStatus.SERVICE_UNAVAILABLE,
                 detail=f'Could not reach Listmonk API: {e}',
@@ -95,6 +99,7 @@ class Interface:
             updates['default_list'] = list_id
         self.__pb.client.collection('monk_client_lists').update(client_id, updates)
 
+        logger.info('create_list.ok', extra={'client': client, 'list_id': list_id, 'list_name': result['data']['name']})
         return ListSchema(**result['data'])
 
     def user_list(self, user_id):
@@ -114,6 +119,7 @@ class Interface:
 
         self.__monk.delete(params=params.model_dump(exclude_none=True, exclude={'client'}))
 
+        logger.info('delete_list.ok', extra={'client': params.client.id, 'ids': params.id})
         return DeleteResponseSchema(data=True)
 
     def update_list(self, list_id, payload: UpdateListSchema) -> ResponseUpdateListSchema:
@@ -123,6 +129,7 @@ class Interface:
         )
 
         # monk_lists only stores the id; no extra fields to sync
+        logger.info('update_list.ok', extra={'client': payload.client.id, 'list_id': list_id})
         return ResponseUpdateListSchema(**response.json())
 
     # -------------------------------------------------------------------------
@@ -133,6 +140,10 @@ class Interface:
         client_list_ids = self._get_client_list_ids(payload.client.id)
         for list_id in payload.campaign.lists:
             if str(list_id) not in client_list_ids:
+                logger.error(
+                    'create_campaign.forbidden',
+                    extra={'client': payload.client.id, 'list_id': list_id},
+                )
                 raise HTTPException(
                     status_code=HTTPStatus.FORBIDDEN,
                     detail=f'List {list_id} does not belong to client "{payload.client.id}"',
@@ -141,12 +152,18 @@ class Interface:
         try:
             response = self.__monk_campaigns.post(payload.campaign.model_dump())
         except requests.RequestException as e:
+            logger.error('create_campaign.unreachable', extra={'client': payload.client.id, 'error': str(e)})
             raise HTTPException(
                 status_code=HTTPStatus.SERVICE_UNAVAILABLE,
                 detail=f'Could not reach Listmonk API: {e}',
             )
         response.raise_for_status()
-        return CampaignSchema(**response.json()['data'])
+        data = response.json()['data']
+        logger.info(
+            'create_campaign.ok',
+            extra={'client': payload.client.id, 'campaign_id': data['id'], 'campaign_name': data['name']},
+        )
+        return CampaignSchema(**data)
 
     def get_campaigns(self, client: ClientSchema) -> list[CampaignSchema]:
         client_list_ids = self._get_client_list_ids(client.id)
@@ -158,6 +175,7 @@ class Interface:
         filtered = [
             CampaignSchema(**c) for c in all_campaigns if any(str(lst['id']) in client_list_ids for lst in c.get('lists', []))
         ]
+        logger.info('get_campaigns.ok', extra={'client': client.id, 'count': len(filtered)})
         return filtered
 
     def update_campaign(self, campaign_id: int, payload: UpdateCampaignSchema) -> ResponseCampaignSchema:
@@ -180,6 +198,7 @@ class Interface:
 
         response = self.__monk_campaigns.put(merged, path=f'/{campaign_id}')
         response.raise_for_status()
+        logger.info('update_campaign.ok', extra={'client': payload.client.id, 'campaign_id': campaign_id})
         return ResponseCampaignSchema(data=CampaignSchema(**response.json()['data']))
 
     def delete_campaign(self, campaign_id: int, client: ClientSchema) -> DeleteResponseSchema:
@@ -188,15 +207,18 @@ class Interface:
 
         response = self.__monk_campaigns.delete({}, path=f'/{campaign_id}')
         response.raise_for_status()
+        logger.info('delete_campaign.ok', extra={'client': client.id, 'campaign_id': campaign_id})
         return DeleteResponseSchema(data=True)
 
     def set_campaign_status(self, campaign_id: int, status: str, client: ClientSchema) -> CampaignSchema:
         campaign = self._get_campaign_raw(campaign_id)
         self._verify_campaign_ownership(campaign, client.id)
 
-        response = self.__monk_campaigns.post({'status': status}, path=f'/{campaign_id}/status')
+        response = self.__monk_campaigns.put({'status': status}, path=f'/{campaign_id}/status')
         response.raise_for_status()
-        return CampaignSchema(**response.json()['data'])
+        data = response.json()['data']
+        logger.info('set_campaign_status.ok', extra={'client': client.id, 'campaign_id': campaign_id, 'status': data['status']})
+        return CampaignSchema(**data)
 
     # -------------------------------------------------------------------------
     # Subscribers
@@ -209,6 +231,7 @@ class Interface:
 
         default_list = result.items[0].default_list
         if not default_list:
+            logger.error('import_subscribers.no_default_list', extra={'client': client.id})
             raise HTTPException(
                 status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
                 detail=f'Client "{client.id}" has no default list',
@@ -226,8 +249,10 @@ class Interface:
                 data={'params': params},
             )
         except requests.RequestException as e:
+            logger.error('import_subscribers.unreachable', extra={'client': client.id, 'error': str(e)})
             raise HTTPException(status_code=HTTPStatus.SERVICE_UNAVAILABLE, detail=f'Could not reach Listmonk API: {e}')
         response.raise_for_status()
+        logger.info('import_subscribers.ok', extra={'client': client.id, 'default_list': default_list, 'file': filename})
         return response.json()
 
 

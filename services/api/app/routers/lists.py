@@ -1,4 +1,3 @@
-import logging
 from http import HTTPStatus
 from typing import Annotated, Optional
 
@@ -18,10 +17,6 @@ from app.schemas import (
 )
 from app.sessions import PocketBaseSession, get_pocketbase_session
 from app.settings import Settings
-
-logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
-logger.warning('Started')
 
 settings = Settings()
 
