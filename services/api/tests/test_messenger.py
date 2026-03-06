@@ -3,6 +3,7 @@ from http import HTTPStatus
 
 from fastapi.testclient import TestClient
 
+from app.handlers.fake import FakeHandler
 from app.main import app
 from app.sessions import get_monk_session
 
@@ -37,3 +38,13 @@ def test_missing_auth_returns_401():
     finally:
         # Restore is handled by the autouse override_monk fixture on the next test.
         pass
+
+
+def test_fake_handler_captures_payload(client):
+    """FakeHandler must store received payloads for test inspection."""
+    FakeHandler.clear()
+    client.post('/messenger/fake', json=VALID_PAYLOAD)
+    assert len(FakeHandler.received) == 1
+    msg = FakeHandler.received[0]
+    assert msg.subject == VALID_PAYLOAD['subject']
+    assert msg.recipients[0].email == VALID_PAYLOAD['recipients'][0]['email']

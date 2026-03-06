@@ -8,11 +8,20 @@ logger = logging.getLogger(__name__)
 
 
 class FakeHandler(MessengerHandlerBase):
+    received: list[MessengerPayload] = []
+
+    @classmethod
+    def clear(cls) -> None:
+        cls.received.clear()
+
     @override
     def send(self, payload: MessengerPayload) -> None:
+        self.received.append(payload)
         logger.info(
-            'FakeHandler: campaign=%r subject=%r recipients=%d',
-            payload.campaign.name,
-            payload.subject,
-            len(payload.recipients),
+            'fake_handler.send',
+            extra={
+                'campaign': payload.campaign.name,
+                'subject': payload.subject,
+                'recipients': len(payload.recipients),
+            },
         )
