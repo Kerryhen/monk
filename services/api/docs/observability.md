@@ -52,9 +52,11 @@ Use prefixed or descriptive alternatives: `list_name`, `campaign_name`, `file` i
 | `update_campaign.ok` | INFO | `client`, `campaign_id` |
 | `delete_campaign.ok` | INFO | `client`, `campaign_id` |
 | `set_campaign_status.ok` | INFO | `client`, `campaign_id`, `status` |
-| `import_subscribers.ok` | INFO | `client`, `default_list`, `file` |
+| `import_subscribers.ok` | INFO | `client`, `target_list`, `file` |
 | `import_subscribers.no_default_list` | ERROR | `client` |
+| `import_subscribers.invalid_list_fallback` | WARNING | `client`, `list_id`, `default_list` |
 | `import_subscribers.unreachable` | ERROR | `client`, `error` |
+| `import_subscribers_json.ok` | INFO | `client`, `target_list`, `count` |
 
 ### `app.sessions`
 
