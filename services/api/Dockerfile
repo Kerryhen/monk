@@ -22,4 +22,4 @@ COPY --from=builder /project/.venv/ /project/.venv
 ENV PATH="/project/.venv/bin:$PATH"
 # set command/entrypoint, adapt to fit your needs
 COPY . /services/api
-CMD ["python", "services/api/main.py"]
+CMD ["python", "/services/api/main.py"]

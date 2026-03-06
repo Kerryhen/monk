@@ -6,3 +6,4 @@ htmlcov/**
 .pdm-build/**
 .env**
 **.md
+!README.md

@@ -6,7 +6,7 @@ x-listmonk_db-credentials: &listmonk_db-credentials                             
 services:
 
   api:
-    image: campaing_api:latest
+    image: ghcr.io/kerryhen/monk-api:latest
     build:
       context: ./services/api
     environment:
