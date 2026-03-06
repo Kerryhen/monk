@@ -1,7 +1,7 @@
 import json
 import logging
 from http import HTTPStatus
-from typing import Annotated
+from typing import Annotated, Optional
 
 import requests
 from fastapi import Depends, HTTPException
@@ -29,19 +29,22 @@ settings = Settings()
 url_monk = f'{settings.LISTMONK_API_URL}/lists'
 url_monk_campaigns = f'{settings.LISTMONK_API_URL}/campaigns'
 url_monk_subscribers = f'{settings.LISTMONK_API_URL}/import/subscribers'
+url_monk_subscribers_single = f'{settings.LISTMONK_API_URL}/subscribers'
 auth_monk = (settings.LISTMONK_USER, settings.LISTMONK_TOKEN)
 
 MonkLists = Monk(auth_creds=auth_monk, url=url_monk)
 MonkCampaigns = Monk(auth_creds=auth_monk, url=url_monk_campaigns)
 MonkSubscribers = Monk(auth_creds=auth_monk, url=url_monk_subscribers)
+MonkSubscribersSingle = Monk(auth_creds=auth_monk, url=url_monk_subscribers_single)
 Pocket = Annotated[PocketBaseSession, Depends(get_pocketbase_session)]
 
 
 class Interface:
-    def __init__(self, monk, monk_campaigns, monk_subscribers, pb):
+    def __init__(self, monk, monk_campaigns, monk_subscribers, monk_subscribers_single, pb):
         self.__monk = monk
         self.__monk_campaigns = monk_campaigns
         self.__monk_subscribers = monk_subscribers
+        self.__monk_subscribers_single = monk_subscribers_single
         self.__pb = pb
 
     # -------------------------------------------------------------------------
@@ -224,12 +227,13 @@ class Interface:
     # Subscribers
     # -------------------------------------------------------------------------
 
-    def import_subscribers(self, client: ClientSchema, file_bytes: bytes, filename: str) -> dict:
+    def import_subscribers(self, client: ClientSchema, file_bytes: bytes, filename: str, list_id: Optional[int] = None) -> dict:
         result = self.__pb.client.collection('monk_client_lists').get_list(1, 1, {'filter': f'client="{client.id}"'})
         if result.total_items == 0:
             raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail=f'Client "{client.id}" not found')
 
-        default_list = result.items[0].default_list
+        record = result.items[0]
+        default_list = record.default_list
         if not default_list:
             logger.error('import_subscribers.no_default_list', extra={'client': client.id})
             raise HTTPException(
@@ -237,10 +241,21 @@ class Interface:
                 detail=f'Client "{client.id}" has no default list',
             )
 
+        client_list_ids = [str(lid) for lid in record.lists]
+        if list_id is not None and str(list_id) in client_list_ids:
+            target_list = list_id
+        else:
+            if list_id is not None:
+                logger.warning(
+                    'import_subscribers.invalid_list_fallback',
+                    extra={'client': client.id, 'list_id': list_id, 'default_list': default_list},
+                )
+            target_list = int(default_list)
+
         params = json.dumps({
             'mode': 'subscribe',
             'subscription_status': 'confirmed',
-            'lists': [int(default_list)],
+            'lists': [target_list],
             'delim': ',',
         })
         try:
@@ -252,11 +267,27 @@ class Interface:
             logger.error('import_subscribers.unreachable', extra={'client': client.id, 'error': str(e)})
             raise HTTPException(status_code=HTTPStatus.SERVICE_UNAVAILABLE, detail=f'Could not reach Listmonk API: {e}')
         response.raise_for_status()
-        logger.info('import_subscribers.ok', extra={'client': client.id, 'default_list': default_list, 'file': filename})
+        logger.info('import_subscribers.ok', extra={'client': client.id, 'target_list': target_list, 'file': filename})
         return response.json()
 
+    def delete_subscriber_by_email(self, email: str) -> None:
+        response = self.__monk_subscribers_single.get({'query': f"subscribers.email='{email}'"})
+        if not response.ok:
+            logger.warning('delete_subscriber_by_email.query_failed', extra={'email': email})
+            return
+        results = response.json().get('data', {}).get('results') or []
+        if not results:
+            logger.warning('delete_subscriber_by_email.not_found', extra={'email': email})
+            return
+        subscriber_id = results[0]['id']
+        del_response = self.__monk_subscribers_single.delete({}, path=f'/{subscriber_id}')
+        if del_response.ok:
+            logger.info('delete_subscriber_by_email.ok', extra={'email': email, 'subscriber_id': subscriber_id})
+        else:
+            logger.warning('delete_subscriber_by_email.delete_failed', extra={'email': email, 'subscriber_id': subscriber_id})
 
-interface = Interface(MonkLists, MonkCampaigns, MonkSubscribers, get_pocketbase_session())
+
+interface = Interface(MonkLists, MonkCampaigns, MonkSubscribers, MonkSubscribersSingle, get_pocketbase_session())
 
 
 def get_interface_api():

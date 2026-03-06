@@ -1,5 +1,5 @@
 from http import HTTPStatus
-from typing import Annotated
+from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, UploadFile
 
@@ -16,7 +16,7 @@ Api = Annotated[Interface, Depends(get_interface_api)]
 
 
 @router.post('/import', status_code=HTTPStatus.OK, dependencies=[Depends(get_monk_session)])
-async def import_subscribers(client: str, file: UploadFile, api: Api):
-    """Upload a CSV of subscribers and enroll them in the client's default list."""
+async def import_subscribers(client: str, file: UploadFile, api: Api, list_id: Optional[int] = None):
+    """Upload a CSV of subscribers and enroll them in the specified list (or the client's default list)."""
     content = await file.read()
-    return api.import_subscribers(ClientSchema(id=client), content, file.filename)
+    return api.import_subscribers(ClientSchema(id=client), content, file.filename, list_id)
