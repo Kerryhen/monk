@@ -258,6 +258,19 @@ class ResponseCampaignSchema(BaseModel):
 
 
 # =============================================================================
+# SUBSCRIBER IMPORT SCHEMAS
+# =============================================================================
+
+
+class ImportSubscriberItem(BaseModel):
+    """A single subscriber entry for JSON bulk import."""
+
+    email: str
+    name: str = ''
+    attribs: Dict[str, Any] = {}
+
+
+# =============================================================================
 # MESSENGER SCHEMAS
 # Shape of the payload Listmonk sends to a custom messenger endpoint.
 # =============================================================================

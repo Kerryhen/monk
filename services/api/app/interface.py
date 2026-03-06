@@ -1,3 +1,5 @@
+import csv
+import io
 import json
 import logging
 from http import HTTPStatus
@@ -14,6 +16,7 @@ from app.schemas import (
     CreateListSchema,
     DeleteListSchema,
     DeleteResponseSchema,
+    ImportSubscriberItem,
     ListSchema,
     ResponseCampaignSchema,
     ResponseUpdateListSchema,
@@ -227,7 +230,8 @@ class Interface:
     # Subscribers
     # -------------------------------------------------------------------------
 
-    def import_subscribers(self, client: ClientSchema, file_bytes: bytes, filename: str, list_id: Optional[int] = None) -> dict:
+    def _resolve_target_list(self, client: ClientSchema, list_id: Optional[int]) -> int:
+        """Returns the target list ID for an import, falling back to the client default if list_id is absent or not owned."""
         result = self.__pb.client.collection('monk_client_lists').get_list(1, 1, {'filter': f'client="{client.id}"'})
         if result.total_items == 0:
             raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail=f'Client "{client.id}" not found')
@@ -243,15 +247,17 @@ class Interface:
 
         client_list_ids = [str(lid) for lid in record.lists]
         if list_id is not None and str(list_id) in client_list_ids:
-            target_list = list_id
-        else:
-            if list_id is not None:
-                logger.warning(
-                    'import_subscribers.invalid_list_fallback',
-                    extra={'client': client.id, 'list_id': list_id, 'default_list': default_list},
-                )
-            target_list = int(default_list)
+            return list_id
 
+        if list_id is not None:
+            logger.warning(
+                'import_subscribers.invalid_list_fallback',
+                extra={'client': client.id, 'list_id': list_id, 'default_list': default_list},
+            )
+        return int(default_list)
+
+    def _post_csv_to_listmonk(self, client: ClientSchema, file_bytes: bytes, filename: str, target_list: int) -> dict:
+        """Sends a CSV file to Listmonk's bulk import endpoint."""
         params = json.dumps({
             'mode': 'subscribe',
             'subscription_status': 'confirmed',
@@ -267,8 +273,29 @@ class Interface:
             logger.error('import_subscribers.unreachable', extra={'client': client.id, 'error': str(e)})
             raise HTTPException(status_code=HTTPStatus.SERVICE_UNAVAILABLE, detail=f'Could not reach Listmonk API: {e}')
         response.raise_for_status()
-        logger.info('import_subscribers.ok', extra={'client': client.id, 'target_list': target_list, 'file': filename})
         return response.json()
+
+    def import_subscribers(self, client: ClientSchema, file_bytes: bytes, filename: str, list_id: Optional[int] = None) -> dict:
+        target_list = self._resolve_target_list(client, list_id)
+        result = self._post_csv_to_listmonk(client, file_bytes, filename, target_list)
+        logger.info('import_subscribers.ok', extra={'client': client.id, 'target_list': target_list, 'file': filename})
+        return result
+
+    def import_subscribers_json(
+        self, client: ClientSchema, items: list[ImportSubscriberItem], list_id: Optional[int] = None
+    ) -> dict:
+        target_list = self._resolve_target_list(client, list_id)
+
+        buf = io.StringIO()
+        writer = csv.DictWriter(buf, fieldnames=['email', 'name'])
+        writer.writeheader()
+        for item in items:
+            writer.writerow({'email': item.email, 'name': item.name})
+        file_bytes = buf.getvalue().encode()
+
+        result = self._post_csv_to_listmonk(client, file_bytes, 'import.csv', target_list)
+        logger.info('import_subscribers_json.ok', extra={'client': client.id, 'target_list': target_list, 'count': len(items)})
+        return result
 
     def delete_subscriber_by_email(self, email: str) -> None:
         response = self.__monk_subscribers_single.get({'query': f"subscribers.email='{email}'"})

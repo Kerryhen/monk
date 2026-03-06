@@ -42,3 +42,30 @@ def test_import_with_invalid_list_falls_back_to_default(client, created_list):
         files={'file': ('subscribers.csv', io.BytesIO(csv_content), 'text/csv')},
     )
     assert response.status_code == HTTPStatus.OK
+
+
+def test_json_import_to_default_list(client, created_list):
+    """JSON import without list_id enrolls subscribers in the client's default list."""
+    response = client.post(
+        '/subscriber/import/json?client=mxf',
+        json=[{'email': TEST_EMAIL, 'name': 'Test User'}],
+    )
+    assert response.status_code == HTTPStatus.OK
+
+
+def test_json_import_to_specific_list(client, created_list):
+    """JSON import with a valid list_id owned by the client enrolls in that list."""
+    response = client.post(
+        f'/subscriber/import/json?client=mxf&list_id={created_list["id"]}',
+        json=[{'email': TEST_EMAIL, 'name': 'Test User'}],
+    )
+    assert response.status_code == HTTPStatus.OK
+
+
+def test_json_import_with_invalid_list_falls_back_to_default(client, created_list):
+    """JSON import with a list_id not owned by the client silently falls back to default."""
+    response = client.post(
+        '/subscriber/import/json?client=mxf&list_id=99999',
+        json=[{'email': TEST_EMAIL, 'name': 'Test User'}],
+    )
+    assert response.status_code == HTTPStatus.OK
