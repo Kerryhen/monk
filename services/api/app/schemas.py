@@ -255,3 +255,37 @@ class ResponseCampaignSchema(BaseModel):
     """Response schema for campaign create/update operations."""
 
     data: CampaignSchema
+
+
+# =============================================================================
+# MESSENGER SCHEMAS
+# Shape of the payload Listmonk sends to a custom messenger endpoint.
+# =============================================================================
+
+
+class MessengerAttachment(BaseModel):
+    url: str
+    name: str
+
+
+class MessengerRecipient(BaseModel):
+    uuid: str
+    email: str
+    name: str
+    attribs: Dict[str, Any] = {}
+    status: str
+
+
+class MessengerCampaignMeta(BaseModel):
+    uuid: str
+    name: str
+    tags: Optional[List[str]] = None
+
+
+class MessengerPayload(BaseModel):
+    subject: str
+    body: str
+    content_type: str
+    recipients: List[MessengerRecipient]
+    campaign: MessengerCampaignMeta
+    attachments: Optional[List[MessengerAttachment]] = None
