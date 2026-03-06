@@ -1,0 +1,9 @@
+.coverage
+coverage.xml
+htmlcov/**
+**/__pycache__/**
+.venv/**
+.pdm-build/**
+.env**
+**.md
+!README.md

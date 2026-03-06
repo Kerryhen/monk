@@ -1,0 +1,3 @@
+setup:
+  - project: listmonk
+    config: dev_local_test
