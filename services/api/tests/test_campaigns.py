@@ -34,7 +34,7 @@ def test_create_campaign(client, created_campaign):
 
 
 def test_get_campaigns(client, created_campaign):
-    response = client.get('/campaign/', params={'client': 'mxf'})
+    response = client.get('/v1/campaign/', params={'client': 'mxf'})
     assert response.status_code == HTTPStatus.OK
     campaigns = response.json()
     assert isinstance(campaigns, list)
@@ -45,7 +45,7 @@ def test_get_campaigns(client, created_campaign):
 def test_update_campaign(client, created_campaign):
     campaign_id = created_campaign['id']
     response = client.put(
-        f'/campaign/{campaign_id}',
+        f'/v1/campaign/{campaign_id}',
         params={'client': 'mxf'},
         json={'name': 'Updated Campaign Name'},
     )
@@ -67,7 +67,7 @@ def test_delete_campaign(client, created_list):
     )
     campaign = interface.create_campaign(payload)
 
-    response = client.delete(f'/campaign/{campaign.id}', params={'client': 'mxf'})
+    response = client.delete(f'/v1/campaign/{campaign.id}', params={'client': 'mxf'})
     assert response.status_code == HTTPStatus.OK
     assert response.json()['data'] is True
 
@@ -75,7 +75,7 @@ def test_delete_campaign(client, created_list):
 def test_create_campaign_rejects_foreign_list(client, created_list, created_foreign_list):
     """Creating a campaign with a list not owned by the client must return 403."""
     response = client.post(
-        '/campaign/',
+        '/v1/campaign/',
         params={'client': 'mxf'},
         json={
             'name': 'Unauthorized Campaign',
@@ -116,7 +116,7 @@ def test_update_campaign_rejects_foreign_campaign(client, created_list, created_
     )
     try:
         response = client.put(
-            f'/campaign/{foreign_campaign.id}',
+            f'/v1/campaign/{foreign_campaign.id}',
             params={'client': 'mxf'},
             json={'name': 'Hijacked'},
         )
@@ -141,7 +141,7 @@ def test_delete_campaign_rejects_foreign_campaign(client, created_list, created_
         )
     )
     try:
-        response = client.delete(f'/campaign/{foreign_campaign.id}', params={'client': 'mxf'})
+        response = client.delete(f'/v1/campaign/{foreign_campaign.id}', params={'client': 'mxf'})
         assert response.status_code == HTTPStatus.FORBIDDEN
     finally:
         interface.delete_campaign(foreign_campaign.id, ClientSchema(id='other_test_client'))
@@ -150,7 +150,7 @@ def test_delete_campaign_rejects_foreign_campaign(client, created_list, created_
 def test_start_campaign(client, created_campaign):
     """Starting a campaign must return 200 and transition status to running or finished."""
     campaign_id = created_campaign['id']
-    response = client.post(f'/campaign/{campaign_id}/start', params={'client': 'mxf'})
+    response = client.post(f'/v1/campaign/{campaign_id}/start', params={'client': 'mxf'})
     assert response.status_code == HTTPStatus.OK
     assert response.json()['status'] in {'running', 'finished'}
 
@@ -158,9 +158,9 @@ def test_start_campaign(client, created_campaign):
 def test_stop_campaign(client, created_campaign):
     """Stopping a running campaign must return 200 with status paused."""
     campaign_id = created_campaign['id']
-    start = client.post(f'/campaign/{campaign_id}/start', params={'client': 'mxf'})
+    start = client.post(f'/v1/campaign/{campaign_id}/start', params={'client': 'mxf'})
     if start.json()['status'] == 'finished':
         pytest.skip('Campaign finished immediately (no subscribers in list)')
-    response = client.post(f'/campaign/{campaign_id}/stop', params={'client': 'mxf'})
+    response = client.post(f'/v1/campaign/{campaign_id}/stop', params={'client': 'mxf'})
     assert response.status_code == HTTPStatus.OK
     assert response.json()['status'] == 'paused'

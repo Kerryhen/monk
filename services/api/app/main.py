@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 # from fastapi.staticfiles import StaticFiles
@@ -12,10 +12,13 @@ configure_logging()
 settings = Settings()
 app = FastAPI()
 
-app.include_router(lists.router)
-app.include_router(campaign.router)
-app.include_router(leads.router)
-app.include_router(messenger.router)
+v1 = APIRouter(prefix='/v1')
+v1.include_router(lists.router)
+v1.include_router(campaign.router)
+v1.include_router(leads.router)
+v1.include_router(messenger.router)
+
+app.include_router(v1)
 
 app.add_middleware(
     CORSMiddleware,

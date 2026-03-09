@@ -42,13 +42,32 @@ The `Interface` class (`services/api/app/interface.py`) is the single coordinati
 
 ## API Endpoints
 
-All routes are under `/list` and require a `?client=<client_id>` query parameter.
+All routes are prefixed with `/v1/` and require a `?client=<client_id>` query parameter.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/list/` | Create a new list for a client |
-| `DELETE` | `/list/` | Delete one or more lists by ID or query |
-| `PATCH` | `/list/{list_id}` | Update a list's metadata |
+| `POST` | `/v1/list/` | Create a new list |
+| `DELETE` | `/v1/list/` | Delete one or more lists |
+| `PATCH` | `/v1/list/{list_id}` | Update a list |
+| `POST` | `/v1/campaign/` | Create a campaign |
+| `GET` | `/v1/campaign/` | List campaigns for a client |
+| `PUT` | `/v1/campaign/{id}` | Update a campaign |
+| `DELETE` | `/v1/campaign/{id}` | Delete a campaign |
+| `POST` | `/v1/campaign/{id}/start` | Start a campaign |
+| `POST` | `/v1/campaign/{id}/stop` | Stop a campaign |
+| `POST` | `/v1/subscriber/import` | Import subscribers (CSV) |
+| `POST` | `/v1/subscriber/import/json` | Import subscribers (JSON) |
+| `POST` | `/v1/messenger/{handler}` | Webhook delivery handler |
+
+## Versioning
+
+Routes are versioned by URL prefix. The current stable version is `/v1/`.
+
+- `fix:` / `perf:` / `refactor:` commits → patch bump (`0.0.X`)
+- `feat:` commits → minor bump (`0.X.0`)
+- `feat!:` or `BREAKING CHANGE:` footer → major bump (`X.0.0`) — a new `/v2/` router is added; `/v1/` remains active indefinitely
+
+Releases are automated via Conventional Commits and release-please.
 
 ## Getting Started
 
