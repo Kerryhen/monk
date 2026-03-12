@@ -32,7 +32,7 @@ jobs:
         working-directory: services/api
         run: doppler run -- pdm run task test
         env:
-          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN_STG }}
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -49,4 +49,6 @@ jobs:
           tags: ghcr.io/${{ github.repository_owner }}/monk-api:dev
 
       - name: Redeploy Dockploy dev environment
-        run: curl -s -X GET "${{ secrets.DOCKPLOY_DEV_WEBHOOK }}"
+        run: doppler run -- sh -c 'curl -s -X GET "$DOCKPLOY_WEBHOOK"'
+        env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN_STG }}

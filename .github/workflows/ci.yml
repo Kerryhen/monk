@@ -49,5 +49,5 @@ jobs:
       - name: Run tests
         run: doppler run -- pdm run task test
         env:
-          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN_STG }}
 

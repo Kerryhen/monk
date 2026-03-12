@@ -92,7 +92,7 @@ def test_create_campaign_rejects_foreign_list(client, created_list, created_fore
 def test_update_campaign_rejects_foreign_list(client, created_campaign, created_foreign_list):
     """Updating a campaign to use a list not owned by the client must return 403."""
     response = client.put(
-        f'/campaign/{created_campaign["id"]}',
+        f'/v1/campaign/{created_campaign["id"]}',
         params={'client': 'mxf'},
         json={'lists': [{'id': created_foreign_list['id']}]},
     )

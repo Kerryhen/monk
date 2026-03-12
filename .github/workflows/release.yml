@@ -30,7 +30,7 @@ jobs:
       - name: Run tests
         run: doppler run -- pdm run task test
         env:
-          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN_STG }}
 
   release:
     needs: test
@@ -58,4 +58,6 @@ jobs:
             ghcr.io/${{ github.repository_owner }}/monk-api:latest
 
       - name: Deploy to production (Dockploy)
-        run: curl -s -X GET "${{ secrets.DOCKPLOY_PROD_WEBHOOK }}"
+        run: doppler run -- sh -c 'curl -s -X GET "$DOCKPLOY_WEBHOOK"'
+        env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN_PRD }}
