@@ -34,6 +34,9 @@ jobs:
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN_STG }}
 
+      - name: Set lowercase owner
+        run: echo "OWNER=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
@@ -46,7 +49,7 @@ jobs:
         with:
           context: services/api
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/monk-api:dev
+          tags: ghcr.io/${{ env.OWNER }}/monk-api:dev
 
       - name: Redeploy Dockploy dev environment
         run: doppler run -- sh -c 'curl -s -X GET "$DOCKPLOY_WEBHOOK"'
