@@ -160,5 +160,6 @@ Maps a client to its owned lists.
 
 ## Further Reading
 
+- [CI/CD Workflows](docs/workflows.md) — git flow, CI lint, release process, and local testing with act
 - [Messenger Handlers](services/api/docs/messenger-handlers.md) — how the messenger gateway works and how to add a new delivery integration
 - [Observability](services/api/docs/observability.md) — logging conventions, structured fields, and the OpenTelemetry migration path
