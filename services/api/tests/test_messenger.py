@@ -18,13 +18,13 @@ VALID_PAYLOAD = {
 
 
 def test_fake_handler_returns_200(client):
-    response = client.post('/messenger/fake', json=VALID_PAYLOAD)
+    response = client.post('/v1/messenger/fake', json=VALID_PAYLOAD)
     assert response.status_code == HTTPStatus.OK
     assert response.json() == {'status': 'ok'}
 
 
 def test_unknown_handler_returns_404(client):
-    response = client.post('/messenger/unknown_handler', json=VALID_PAYLOAD)
+    response = client.post('/v1/messenger/unknown_handler', json=VALID_PAYLOAD)
     assert response.status_code == HTTPStatus.NOT_FOUND
 
 
@@ -33,7 +33,7 @@ def test_missing_auth_returns_401():
     app.dependency_overrides.pop(get_monk_session, None)
     try:
         bare_client = TestClient(app, raise_server_exceptions=False)
-        response = bare_client.post('/messenger/fake', json=VALID_PAYLOAD)
+        response = bare_client.post('/v1/messenger/fake', json=VALID_PAYLOAD)
         assert response.status_code == HTTPStatus.UNAUTHORIZED
     finally:
         # Restore is handled by the autouse override_monk fixture on the next test.
@@ -43,7 +43,7 @@ def test_missing_auth_returns_401():
 def test_fake_handler_captures_payload(client):
     """FakeHandler must store received payloads for test inspection."""
     FakeHandler.clear()
-    client.post('/messenger/fake', json=VALID_PAYLOAD)
+    client.post('/v1/messenger/fake', json=VALID_PAYLOAD)
     assert len(FakeHandler.received) == 1
     msg = FakeHandler.received[0]
     assert msg.subject == VALID_PAYLOAD['subject']
