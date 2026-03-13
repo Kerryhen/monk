@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - 'v*.*.*'
+      - 'monk-api-v*.*.*'
+  workflow_dispatch:
 
 jobs:
   test:
@@ -62,7 +64,7 @@ jobs:
           context: services/api
           push: true
           tags: |
-            ghcr.io/${{ steps.ver.outputs.owner }}/monk-api:${{ github.ref_name }}
+            ghcr.io/${{ steps.ver.outputs.owner }}/monk-api:v${{ steps.ver.outputs.version }}
             ghcr.io/${{ steps.ver.outputs.owner }}/monk-api:latest
 
       - name: Deploy to production (Dockploy)
