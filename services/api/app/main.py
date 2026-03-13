@@ -1,3 +1,5 @@
+from importlib.metadata import version
+
 from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -10,7 +12,7 @@ from .settings import Settings
 configure_logging()
 
 settings = Settings()
-app = FastAPI()
+app = FastAPI(version=version('listmonk'))
 
 v1 = APIRouter(prefix='/v1')
 v1.include_router(lists.router)

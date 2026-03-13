@@ -26,6 +26,7 @@ jobs:
         run: pdm run task lint
 
   test:
+    needs: lint
     runs-on: ubuntu-latest
     defaults:
       run:
