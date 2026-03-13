@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, EmailStr, Field, model_validator
 
 # =============================================================================
 # LISTMONK (LM) SCHEMAS
@@ -265,7 +265,7 @@ class ResponseCampaignSchema(BaseModel):
 class ImportSubscriberItem(BaseModel):
     """A single subscriber entry for JSON bulk import."""
 
-    email: str
+    email: EmailStr
     name: str = ''
     attribs: Dict[str, Any] = {}
 
