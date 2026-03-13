@@ -19,6 +19,7 @@ from app.schemas import (
     DeleteResponseSchema,
     ImportSubscriberItem,
     ListSchema,
+    LM_CreateListSchema,
     ResponseCampaignSchema,
     ResponseUpdateListSchema,
     UpdateCampaignSchema,
@@ -255,20 +256,28 @@ class Interface:
     # Subscribers
     # -------------------------------------------------------------------------
 
+    def _get_or_create_default_list(self, client: ClientSchema) -> int:
+        """Auto-creates the client and a default list if they do not exist yet."""
+        logger.info('import_subscribers.auto_create_client', extra={'client': client.id})
+        list_obj = self.create_list(
+            CreateListSchema(
+                client=client,
+                list=LM_CreateListSchema(name=f'{client.id} Default', type='private', optin='single'),
+            )
+        )
+        return list_obj.id
+
     def _resolve_target_list(self, client: ClientSchema, list_id: Optional[int]) -> int:
-        """Returns the target list ID for an import, falling back to the client default if list_id is absent or not owned."""
+        """Returns the target list ID for an import. Auto-creates the client with a default list if needed."""
         result = self.__pb.client.collection('monk_client_lists').get_list(1, 1, {'filter': f'client="{client.id}"'})
+
         if result.total_items == 0:
-            raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail=f'Client "{client.id}" not found')
+            return self._get_or_create_default_list(client)
 
         record = result.items[0]
         default_list = record.default_list
         if not default_list:
-            logger.error('import_subscribers.no_default_list', extra={'client': client.id})
-            raise HTTPException(
-                status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
-                detail=f'Client "{client.id}" has no default list',
-            )
+            return self._get_or_create_default_list(client)
 
         client_list_ids = [str(lid) for lid in record.lists]
         if list_id is not None:
