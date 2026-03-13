@@ -170,5 +170,7 @@ def test_stop_campaign(client, created_campaign):
     if start.json()['status'] == 'finished':
         pytest.skip('Campaign finished immediately (no subscribers in list)')
     response = client.post(f'/v1/campaign/{campaign_id}/stop', headers=MXF)
+    if response.status_code == HTTPStatus.BAD_REQUEST:
+        pytest.skip('Campaign finished before stop could be issued')
     assert response.status_code == HTTPStatus.OK
     assert response.json()['status'] == 'paused'

@@ -56,6 +56,17 @@ class Interface:
     # Helpers
     # -------------------------------------------------------------------------
 
+    @staticmethod
+    def _raise_for_listmonk(response: requests.Response) -> None:
+        """Convert a Listmonk error response into a proper HTTPException."""
+        if response.ok:
+            return
+        try:
+            detail = response.json().get('message', response.text)
+        except Exception:
+            detail = response.text
+        raise HTTPException(status_code=response.status_code, detail=detail)
+
     def _get_client_list_ids(self, client_id: str) -> list[str]:
         result = self.__pb.client.collection('monk_client_lists').get_list(1, 1, {'filter': f'client="{client_id}"'})
         if result.total_items == 0:
@@ -64,7 +75,7 @@ class Interface:
 
     def _get_campaign_raw(self, campaign_id: int) -> dict:
         response = self.__monk_campaigns.get({}, path=f'/{campaign_id}')
-        response.raise_for_status()
+        self._raise_for_listmonk(response)
         return response.json()['data']
 
     def _verify_campaign_ownership(self, campaign: dict, client_id: str) -> list[str]:
@@ -118,7 +129,7 @@ class Interface:
         client_list_ids = [str(lid) for lid in result.items[0].lists]
 
         response = self.__monk.get({'page': 1, 'per_page': 500})
-        response.raise_for_status()
+        self._raise_for_listmonk(response)
         all_lists = response.json()['data']['results'] or []
 
         filtered = [ListSchema(**lst) for lst in all_lists if str(lst['id']) in client_list_ids]
@@ -189,7 +200,7 @@ class Interface:
                 status_code=HTTPStatus.SERVICE_UNAVAILABLE,
                 detail=f'Could not reach Listmonk API: {e}',
             )
-        response.raise_for_status()
+        self._raise_for_listmonk(response)
         data = response.json()['data']
         logger.info(
             'create_campaign.ok',
@@ -201,7 +212,7 @@ class Interface:
         client_list_ids = self._get_client_list_ids(client.id)
 
         response = self.__monk_campaigns.get({'page': 1, 'per_page': 500})
-        response.raise_for_status()
+        self._raise_for_listmonk(response)
         all_campaigns = response.json()['data']['results'] or []
 
         filtered = [
@@ -229,7 +240,7 @@ class Interface:
         merged['lists'] = [lst['id'] if isinstance(lst, dict) else lst for lst in merged['lists']]
 
         response = self.__monk_campaigns.put(merged, path=f'/{campaign_id}')
-        response.raise_for_status()
+        self._raise_for_listmonk(response)
         logger.info('update_campaign.ok', extra={'client': payload.client.id, 'campaign_id': campaign_id})
         return ResponseCampaignSchema(data=CampaignSchema(**response.json()['data']))
 
@@ -238,7 +249,7 @@ class Interface:
         self._verify_campaign_ownership(campaign, client.id)
 
         response = self.__monk_campaigns.delete({}, path=f'/{campaign_id}')
-        response.raise_for_status()
+        self._raise_for_listmonk(response)
         logger.info('delete_campaign.ok', extra={'client': client.id, 'campaign_id': campaign_id})
         return DeleteResponseSchema(data=True)
 
@@ -247,7 +258,7 @@ class Interface:
         self._verify_campaign_ownership(campaign, client.id)
 
         response = self.__monk_campaigns.put({'status': status}, path=f'/{campaign_id}/status')
-        response.raise_for_status()
+        self._raise_for_listmonk(response)
         data = response.json()['data']
         logger.info('set_campaign_status.ok', extra={'client': client.id, 'campaign_id': campaign_id, 'status': data['status']})
         return CampaignSchema(**data)
@@ -307,7 +318,7 @@ class Interface:
         except requests.RequestException as e:
             logger.error('import_subscribers.unreachable', extra={'client': client.id, 'error': str(e)})
             raise HTTPException(status_code=HTTPStatus.SERVICE_UNAVAILABLE, detail=f'Could not reach Listmonk API: {e}')
-        response.raise_for_status()
+        self._raise_for_listmonk(response)
         return response.json()
 
     def import_subscribers(self, client: ClientSchema, file_bytes: bytes, filename: str, list_id: Optional[int] = None) -> dict:
