@@ -121,7 +121,7 @@ class LM_CampaignSchema(BaseModel):
     subject: str
     from_email: str
     type: Literal['regular', 'optin']
-    content_type: Literal['richtext', 'html', 'markdown', 'plain']
+    content_type: Literal['richtext', 'html', 'markdown', 'plain', 'visual']
     status: str
     body: Optional[str] = None
     altbody: Optional[str] = None
