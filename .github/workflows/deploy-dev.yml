@@ -8,6 +8,7 @@ jobs:
   deploy-dev:
     runs-on: ubuntu-latest
     permissions:
+      contents: write
       packages: write
 
     steps:
@@ -33,6 +34,16 @@ jobs:
         run: doppler run -- pdm run task test
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN_STG }}
+
+      - name: Generate coverage badge
+        run: |
+          pip install genbadge[coverage]
+          genbadge coverage -i services/api/coverage.xml -o badges/coverage.svg
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add badges/coverage.svg
+          git diff --staged --quiet || git commit -m "chore: update coverage badge [skip ci]"
+          git push
 
       - name: Set lowercase owner
         run: echo "OWNER=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
