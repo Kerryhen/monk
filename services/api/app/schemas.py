@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, EmailStr, Field, model_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
 # =============================================================================
 # LISTMONK (LM) SCHEMAS
@@ -27,6 +27,14 @@ class LM_ListSchema(BaseModel):
 
 class LM_CreateListSchema(BaseModel):
     """Listmonk POST /lists request body (NewList spec)."""
+
+    model_config = ConfigDict(json_schema_extra={'example': {
+        'name': 'My Subscribers',
+        'type': 'private',
+        'optin': 'single',
+        'description': 'Main subscriber list',
+        'tags': ['newsletter'],
+    }})
 
     name: str
     type: Literal['private', 'public']
@@ -74,6 +82,17 @@ class LM_ResponseListsSchema(BaseModel):
 
 class LM_CreateCampaignSchema(BaseModel):
     """Listmonk POST /campaigns request body (CampaignRequest spec)."""
+
+    model_config = ConfigDict(json_schema_extra={'example': {
+        'name': 'Welcome Campaign',
+        'subject': 'Welcome to our newsletter!',
+        'lists': [1],
+        'from_email': 'sender@example.com',
+        'type': 'regular',
+        'content_type': 'richtext',
+        'body': '<p>Hello, welcome!</p>',
+        'messenger': 'email',
+    }})
 
     name: str = Field(..., description='Campaign name')
     subject: str = Field(..., description='Campaign email subject')
@@ -277,6 +296,11 @@ class ClientInfoSchema(BaseModel):
 
 class ImportSubscriberItem(BaseModel):
     """A single subscriber entry for JSON bulk import."""
+
+    model_config = ConfigDict(json_schema_extra={'example': {
+        'email': 'subscriber@example.com',
+        'name': 'Jane Doe',
+    }})
 
     email: EmailStr
     name: str = ''
