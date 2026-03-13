@@ -21,13 +21,13 @@ InterfaceAPI = Annotated[Interface, Depends(get_interface_api)]
 InstanceID = Annotated[str, Header()]
 
 
-@router.post('/', status_code=HTTPStatus.CREATED, response_model=CampaignSchema)
+@router.post('', status_code=HTTPStatus.CREATED, response_model=CampaignSchema)
 def create_campaign(body: LM_CreateCampaignSchema, iface: InterfaceAPI, x_instance_id: InstanceID):
     payload = CreateCampaignSchema(client=ClientSchema(id=x_instance_id), campaign=body)
     return iface.create_campaign(payload)
 
 
-@router.get('/', response_model=List[CampaignSchema])
+@router.get('', response_model=List[CampaignSchema])
 def get_campaigns(iface: InterfaceAPI, x_instance_id: InstanceID):
     return iface.get_campaigns(ClientSchema(id=x_instance_id))
 

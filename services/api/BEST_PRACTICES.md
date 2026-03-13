@@ -110,6 +110,9 @@ All ownership checks (does this list/campaign belong to this client?) happen in 
 ### No authentication middleware
 Endpoints are identified by the `X-Instance-ID` header. There is no HTTP Basic Auth on any endpoint. Authentication is a concern of the upstream proxy, not this service.
 
+### No trailing slash on root collection endpoints
+Root collection routes are registered without a trailing slash (e.g. `GET /v1/campaign`, `POST /v1/list`). Using `'/'` as the route path causes FastAPI to issue a 307 redirect for requests without the slash — HTTP clients that do not follow redirects by default (e.g. `curl`) will silently fail. Parameterised sub-routes (e.g. `/{id}/start`) are unaffected.
+
 ---
 
 ## Secrets & Environment

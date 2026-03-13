@@ -13,13 +13,13 @@ x-instance-id: {{instance_id}}
 
 ###
 # GET lists
-GET {{base_url}}/v1/list/
+GET {{base_url}}/v1/list
 accept: application/json
 x-instance-id: {{instance_id}}
 
 ###
 # CREATE list
-POST {{base_url}}/v1/list/
+POST {{base_url}}/v1/list
 accept: application/json
 content-type: application/json
 x-instance-id: {{instance_id}}
@@ -34,13 +34,13 @@ x-instance-id: {{instance_id}}
 
 ###
 # GET campaigns
-GET {{base_url}}/v1/campaign/
+GET {{base_url}}/v1/campaign
 accept: application/json
 x-instance-id: {{instance_id}}
 
 ###
 # CREATE campaign (immediate)
-POST {{base_url}}/v1/campaign/
+POST {{base_url}}/v1/campaign
 accept: application/json
 content-type: application/json
 x-instance-id: {{instance_id}}
@@ -62,7 +62,7 @@ x-instance-id: {{instance_id}}
 
 ###
 # CREATE campaign (scheduled)
-POST {{base_url}}/v1/campaign/
+POST {{base_url}}/v1/campaign
 accept: application/json
 content-type: application/json
 x-instance-id: {{instance_id}}

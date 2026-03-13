@@ -14,7 +14,7 @@ Api = Annotated[Interface, Depends(get_interface_api)]
 InstanceID = Annotated[str, Header()]
 
 
-@router.get('/', response_model=ClientInfoSchema)
+@router.get('', response_model=ClientInfoSchema)
 def get_client(api: Api, x_instance_id: InstanceID):
     """Return ownership info for the client: default list and all owned list IDs."""
     return api.get_client(ClientSchema(id=x_instance_id))
