@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.3.0](https://github.com/Kerryhen/monk/compare/monk-api-v0.2.0...monk-api-v0.3.0) (2026-03-13)
+
+
+### Features
+
+* **api:** add GET /v1/list endpoint returning client-scoped lists ([a42e54a](https://github.com/Kerryhen/monk/commit/a42e54ad5bd508c4835d6121982a91c4d09b4990))
+
+
+### Bug Fixes
+
+* **api:** add exponential backoff retry on timeout and network errors ([9434c99](https://github.com/Kerryhen/monk/commit/9434c9998982d416719f7e24ea30e7d5b89cd8c1))
+* **api:** add exponential backoff retry on timeout and network errors in Monk client ([ff3ac9b](https://github.com/Kerryhen/monk/commit/ff3ac9b3fed2e1608ec3ca39ad9c6fe27edd4b01))
+* **api:** set FastAPI version from package metadata ([5d7eb0e](https://github.com/Kerryhen/monk/commit/5d7eb0ece2bc6a362465e20f51924fc00b5b8fbc))
+* **api:** set FastAPI version from package metadata ([6d162f4](https://github.com/Kerryhen/monk/commit/6d162f4cdb7c2ec881b04f4dc90181653abf5132))
+
 ## [0.2.0](https://github.com/Kerryhen/monk/compare/monk-api-v0.1.1...monk-api-v0.2.0) (2026-03-12)
 
 
