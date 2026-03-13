@@ -109,7 +109,11 @@ class Interface:
         return ListSchema(**result['data'])
 
     def get_lists(self, client: ClientSchema) -> list[ListSchema]:
-        client_list_ids = self._get_client_list_ids(client.id)
+        result = self.__pb.client.collection('monk_client_lists').get_list(1, 1, {'filter': f'client="{client.id}"'})
+        if result.total_items == 0:
+            logger.info('get_lists.ok', extra={'client': client.id, 'count': 0})
+            return []
+        client_list_ids = [str(lid) for lid in result.items[0].lists]
 
         response = self.__monk.get({'page': 1, 'per_page': 500})
         response.raise_for_status()
