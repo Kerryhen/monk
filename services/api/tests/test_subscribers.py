@@ -4,10 +4,24 @@ from http import HTTPStatus
 import pytest
 
 from app.interface import interface
+from app.schemas import ClientSchema, DeleteListSchema
 
 TEST_EMAIL = 'testimport@example.com'
 
 MXF = {'X-Instance-ID': 'mxf'}
+NEW_CLIENT = 'brand-new-client'
+NEW_CLIENT_HDR = {'X-Instance-ID': NEW_CLIENT}
+
+
+@pytest.fixture
+def cleanup_new_client():
+    yield
+    try:
+        info = interface.get_client(ClientSchema(id=NEW_CLIENT))
+        if info.lists:
+            interface.delete_list(DeleteListSchema(client=ClientSchema(id=NEW_CLIENT), id=info.lists))
+    except Exception:
+        pass
 
 
 @pytest.fixture(autouse=True)
@@ -77,3 +91,28 @@ def test_json_import_with_invalid_list_returns_404(client, created_list):
         headers=MXF,
     )
     assert response.status_code == HTTPStatus.NOT_FOUND
+
+
+def test_import_auto_creates_client_and_default_list(client, cleanup_new_client):
+    """CSV import for an unknown client auto-creates the client with a default list."""
+    csv_content = f'email,name\n{TEST_EMAIL},Test User\n'.encode()
+    response = client.post(
+        '/v1/subscriber/import',
+        files={'file': ('subscribers.csv', io.BytesIO(csv_content), 'text/csv')},
+        headers=NEW_CLIENT_HDR,
+    )
+    assert response.status_code == HTTPStatus.OK
+    info = interface.get_client(ClientSchema(id=NEW_CLIENT))
+    assert info.default_list is not None
+
+
+def test_json_import_auto_creates_client_and_default_list(client, cleanup_new_client):
+    """JSON import for an unknown client auto-creates the client with a default list."""
+    response = client.post(
+        '/v1/subscriber/import/json',
+        json=[{'email': TEST_EMAIL, 'name': 'Test User'}],
+        headers=NEW_CLIENT_HDR,
+    )
+    assert response.status_code == HTTPStatus.OK
+    info = interface.get_client(ClientSchema(id=NEW_CLIENT))
+    assert info.default_list is not None
