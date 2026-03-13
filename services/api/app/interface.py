@@ -182,7 +182,7 @@ class Interface:
                 )
 
         try:
-            response = self.__monk_campaigns.post(payload.campaign.model_dump())
+            response = self.__monk_campaigns.post(payload.campaign.model_dump(mode='json'))
         except requests.RequestException as e:
             logger.error('create_campaign.unreachable', extra={'client': payload.client.id, 'error': str(e)})
             raise HTTPException(
@@ -225,7 +225,7 @@ class Interface:
 
         # Listmonk PUT requires a full body; merge current state with the requested changes.
         # The GET response returns `lists` as [{id, name, ...}] objects; PUT expects [id] integers.
-        merged = {**campaign, **payload.campaign.model_dump(exclude_none=True)}
+        merged = {**campaign, **payload.campaign.model_dump(mode='json', exclude_none=True)}
         merged['lists'] = [lst['id'] if isinstance(lst, dict) else lst for lst in merged['lists']]
 
         response = self.__monk_campaigns.put(merged, path=f'/{campaign_id}')
