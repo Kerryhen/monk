@@ -7,6 +7,8 @@ import requests
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pocketbase import PocketBase
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from app.settings import Settings
 
@@ -70,61 +72,43 @@ def get_pocketbase_session(admin: bool = True) -> PocketBaseSession:
 
 
 class Monk:
+    _MAX_RETRIES = 3
+    _BACKOFF_FACTOR = 1  # delays: 1s, 2s, 4s
+
     def __init__(self, auth_creds, url, timeout=5):
-        self.__creds = auth_creds
         self.__url = url
-        self.timeout = 5
+        self.timeout = timeout
+
+        retry = Retry(
+            total=self._MAX_RETRIES,
+            backoff_factor=self._BACKOFF_FACTOR,
+            allowed_methods=False,  # retry all HTTP methods
+            status_forcelist=[],  # only retry on network/timeout errors, not HTTP errors
+        )
+        self.__session = requests.Session()
+        self.__session.mount('http://', HTTPAdapter(max_retries=retry))
+        self.__session.mount('https://', HTTPAdapter(max_retries=retry))
+        self.__session.auth = auth_creds
 
     def delete(self, params, path=None):
         url = self.__url + path if path else self.__url
-        return requests.delete(
-            url,
-            params=params,
-            auth=self.__creds,
-            timeout=self.timeout,
-        )
+        return self.__session.delete(url, params=params, timeout=self.timeout)
 
     def post(self, params, path=None):
         url = self.__url + path if path else self.__url
-        return requests.post(
-            url,
-            json=params,
-            auth=self.__creds,
-            timeout=self.timeout,
-        )
+        return self.__session.post(url, json=params, timeout=self.timeout)
 
     def post_multipart(self, files, data, path=None):
         url = self.__url + path if path else self.__url
-        return requests.post(
-            url,
-            files=files,
-            data=data,
-            auth=self.__creds,
-            timeout=self.timeout,
-        )
+        return self.__session.post(url, files=files, data=data, timeout=self.timeout)
 
     def put(self, params, path=None):
         url = self.__url + path if path else self.__url
-        return requests.put(
-            url,
-            json=params,
-            auth=self.__creds,
-            timeout=self.timeout,
-        )
+        return self.__session.put(url, json=params, timeout=self.timeout)
 
     def patch(self, params):
-        return requests.patch(
-            self.__url,
-            params=params,
-            auth=self.__creds,
-            timeout=self.timeout,
-        )
+        return self.__session.patch(self.__url, params=params, timeout=self.timeout)
 
     def get(self, params, path=None):
         url = self.__url + path if path else self.__url
-        return requests.get(
-            url,
-            params=params,
-            auth=self.__creds,
-            timeout=self.timeout,
-        )
+        return self.__session.get(url, params=params, timeout=self.timeout)
