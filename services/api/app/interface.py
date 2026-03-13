@@ -11,6 +11,7 @@ from pocketbase.errors import ClientResponseError
 
 from app.schemas import (
     CampaignSchema,
+    ClientInfoSchema,
     ClientSchema,
     CreateCampaignSchema,
     CreateListSchema,
@@ -122,6 +123,18 @@ class Interface:
         filtered = [ListSchema(**lst) for lst in all_lists if str(lst['id']) in client_list_ids]
         logger.info('get_lists.ok', extra={'client': client.id, 'count': len(filtered)})
         return filtered
+
+    def get_client(self, client: ClientSchema) -> ClientInfoSchema:
+        result = self.__pb.client.collection('monk_client_lists').get_list(1, 1, {'filter': f'client="{client.id}"'})
+        if result.total_items == 0:
+            raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail=f'Client "{client.id}" not found')
+        record = result.items[0]
+        logger.info('get_client.ok', extra={'client': client.id})
+        return ClientInfoSchema(
+            id=client.id,
+            default_list=int(record.default_list) if record.default_list else None,
+            lists=[int(lid) for lid in record.lists],
+        )
 
     def delete_list(self, params: DeleteListSchema) -> DeleteResponseSchema:
         for _id in params.id:
@@ -258,14 +271,15 @@ class Interface:
             )
 
         client_list_ids = [str(lid) for lid in record.lists]
-        if list_id is not None and str(list_id) in client_list_ids:
+        if list_id is not None:
+            if str(list_id) not in client_list_ids:
+                logger.error('import_subscribers.list_not_found', extra={'client': client.id, 'list_id': list_id})
+                raise HTTPException(
+                    status_code=HTTPStatus.NOT_FOUND,
+                    detail=f'List {list_id} not found or does not belong to client "{client.id}"',
+                )
             return list_id
 
-        if list_id is not None:
-            logger.warning(
-                'import_subscribers.invalid_list_fallback',
-                extra={'client': client.id, 'list_id': list_id, 'default_list': default_list},
-            )
         return int(default_list)
 
     def _post_csv_to_listmonk(self, client: ClientSchema, file_bytes: bytes, filename: str, target_list: int) -> dict:
