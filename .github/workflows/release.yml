@@ -43,6 +43,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install Doppler CLI
+        uses: dopplerhq/cli-action@v3
+
       - name: Read version and normalize owner
         id: ver
         run: |
