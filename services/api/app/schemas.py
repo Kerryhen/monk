@@ -258,6 +258,19 @@ class ResponseCampaignSchema(BaseModel):
 
 
 # =============================================================================
+# CLIENT SCHEMAS
+# =============================================================================
+
+
+class ClientInfoSchema(BaseModel):
+    """Client record — ownership info returned by GET /v1/client."""
+
+    id: str
+    default_list: Optional[int] = None
+    lists: List[int]
+
+
+# =============================================================================
 # SUBSCRIBER IMPORT SCHEMAS
 # =============================================================================
 
