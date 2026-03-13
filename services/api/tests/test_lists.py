@@ -1,12 +1,9 @@
 # tests/test_lists.py
 from http import HTTPStatus
 
-import pytest
-
 MXF = {'X-Instance-ID': 'mxf'}
 
 
-@pytest.mark.skip(reason='OldVersion')
 def test_full_list(client):
     payload = {
         'name': 'Automated Test',
@@ -28,12 +25,11 @@ def test_full_list(client):
 
     payload['name'] = 'Updated Name'
 
-    response3 = client.request('PATCH', f'/v1/list/{data["id"]}', json=payload, headers=MXF)
+    response3 = client.patch(f'/v1/list/{data["id"]}', json=payload, headers=MXF)
 
-    assert response3.json().get('name', None) == 'Updated Name'
+    assert response3.json()['data']['name'] == 'Updated Name'
 
-    p2 = {'id': [data['id']]}
-    response2 = client.request('DELETE', '/v1/list', json=p2, headers=MXF)
+    response2 = client.delete('/v1/list', params={'id': [data['id']]}, headers=MXF)
     assert response2.status_code == HTTPStatus.OK
 
 
@@ -77,3 +73,12 @@ def test_delete_list(client, created_list):
     )
 
     assert response.status_code == HTTPStatus.OK
+
+
+def test_get_lists(client, created_list):
+    response = client.get('/v1/list', headers=MXF)
+
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()
+    assert isinstance(data, list)
+    assert any(lst['id'] == created_list['id'] for lst in data)

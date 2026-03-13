@@ -108,8 +108,16 @@ class Interface:
         logger.info('create_list.ok', extra={'client': client, 'list_id': list_id, 'list_name': result['data']['name']})
         return ListSchema(**result['data'])
 
-    def user_list(self, user_id):
-        self.__pb.client.collection('monk_lists').get_list(1, 30, {'filter': f'id="{user_id}"'})
+    def get_lists(self, client: ClientSchema) -> list[ListSchema]:
+        client_list_ids = self._get_client_list_ids(client.id)
+
+        response = self.__monk.get({'page': 1, 'per_page': 500})
+        response.raise_for_status()
+        all_lists = response.json()['data']['results'] or []
+
+        filtered = [ListSchema(**lst) for lst in all_lists if str(lst['id']) in client_list_ids]
+        logger.info('get_lists.ok', extra={'client': client.id, 'count': len(filtered)})
+        return filtered
 
     def delete_list(self, params: DeleteListSchema) -> DeleteResponseSchema:
         for _id in params.id:
