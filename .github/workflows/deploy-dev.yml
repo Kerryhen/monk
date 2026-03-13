@@ -8,6 +8,7 @@ jobs:
   deploy-dev:
     runs-on: ubuntu-latest
     permissions:
+      contents: write
       packages: write
 
     steps:
@@ -33,6 +34,12 @@ jobs:
         run: doppler run -- pdm run task test
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN_STG }}
+
+      - name: Generate coverage badge
+        uses: tj-actions/coverage-badge-py@v2
+        with:
+          coverage-xml-file: services/api/coverage.xml
+          output: badges/coverage.svg
 
       - name: Set lowercase owner
         run: echo "OWNER=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"

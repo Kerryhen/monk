@@ -1,5 +1,7 @@
 # Monk — Listmonk Multi-Client API
 
+![Coverage](https://raw.githubusercontent.com/Kerryhen/monk/development/badges/coverage.svg)
+
 A multitenancy middleware that adds per-client isolation on top of [Listmonk](https://listmonk.app/), an open-source email list management tool.
 
 ## Overview
