@@ -17,8 +17,8 @@ class LM_ListSchema(BaseModel):
     updated_at: datetime
     uuid: str
     name: str
-    type: str
-    optin: str
+    type: Literal['private', 'public']
+    optin: Literal['single', 'double']
     tags: List[str]
     description: Optional[str] = None
     status: Optional[str] = None  # present in practice; omitted from the OpenAPI spec
@@ -96,7 +96,7 @@ class LM_CreateCampaignSchema(BaseModel):
 
     name: str = Field(..., description='Campaign name')
     subject: str = Field(..., description='Campaign email subject')
-    lists: List[int] = Field(..., description='List IDs to send campaign to')
+    lists: List[int] = Field(..., min_length=1, description='List IDs to send campaign to')
     from_email: Optional[str] = Field(None, description="'From' email in campaign emails")
     type: Literal['regular', 'optin'] = Field(..., description='Campaign type')
     content_type: Literal['richtext', 'html', 'markdown', 'plain'] = Field(..., description='Content type')
@@ -120,8 +120,8 @@ class LM_CampaignSchema(BaseModel):
     name: str
     subject: str
     from_email: str
-    type: str
-    content_type: str
+    type: Literal['regular', 'optin']
+    content_type: Literal['richtext', 'html', 'markdown', 'plain']
     status: str
     body: Optional[str] = None
     altbody: Optional[str] = None
