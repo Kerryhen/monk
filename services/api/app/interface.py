@@ -59,7 +59,7 @@ class Interface:
     def _get_client_list_ids(self, client_id: str) -> list[str]:
         result = self.__pb.client.collection('monk_client_lists').get_list(1, 1, {'filter': f'client="{client_id}"'})
         if result.total_items == 0:
-            raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail=f'Client "{client_id}" not found')
+            return []
         return [str(lid) for lid in result.items[0].lists]
 
     def _get_campaign_raw(self, campaign_id: int) -> dict:

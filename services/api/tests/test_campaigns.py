@@ -44,6 +44,12 @@ def test_get_campaigns(client, created_campaign):
     assert created_campaign['id'] in ids
 
 
+def test_get_campaigns_unknown_client_returns_empty(client):
+    response = client.get('/v1/campaign/', headers={'X-Instance-ID': 'never-registered-client'})
+    assert response.status_code == HTTPStatus.OK
+    assert response.json() == []
+
+
 def test_update_campaign(client, created_campaign):
     campaign_id = created_campaign['id']
     response = client.put(
