@@ -98,7 +98,7 @@ class LM_CreateCampaignSchema(BaseModel):
     subject: str = Field(..., description='Campaign email subject')
     lists: List[int] = Field(..., min_length=1, description='List IDs to send campaign to')
     from_email: Optional[str] = Field(None, description="'From' email in campaign emails")
-    type: Literal['regular', 'optin'] = Field(..., description='Campaign type')
+    type: Literal['regular', 'optin'] = Field('regular', description='Campaign type')
     content_type: Literal['richtext', 'html', 'markdown', 'plain'] = Field(..., description='Content type')
     body: str = Field(..., description='Content body of campaign')
     altbody: Optional[str] = Field(None, description='Alternate plain text body for HTML or richtext emails')
