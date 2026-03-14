@@ -37,7 +37,7 @@ class LM_CreateListSchema(BaseModel):
     }})
 
     name: str
-    type: Literal['private', 'public']
+    type: Literal['private', 'public'] = 'private'
     optin: Literal['single', 'double']
     tags: Optional[List[str]] = None
     description: Optional[str] = None
