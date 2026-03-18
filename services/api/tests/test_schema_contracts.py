@@ -5,6 +5,7 @@ currently stored in Listmonk. These catch mismatches between our
 schema definitions and what Listmonk actually returns in practice
 (e.g. undocumented enum values, nullable fields marked required, etc.).
 """
+
 import pytest
 
 from app.interface import MonkCampaigns, MonkLists
@@ -23,13 +24,13 @@ def _fetch_all_lists() -> list[dict]:
     return response.json()['data']['results'] or []
 
 
-@pytest.mark.parametrize('campaign', _fetch_all_campaigns(), ids=lambda c: f"campaign_{c['id']}")
+@pytest.mark.parametrize('campaign', _fetch_all_campaigns(), ids=lambda c: f'campaign_{c["id"]}')
 def test_campaign_schema_parses_listmonk_response(campaign):
     """CampaignSchema must parse every campaign Listmonk returns."""
     CampaignSchema(**campaign)
 
 
-@pytest.mark.parametrize('lst', _fetch_all_lists(), ids=lambda item: f"list_{item['id']}")
+@pytest.mark.parametrize('lst', _fetch_all_lists(), ids=lambda item: f'list_{item["id"]}')
 def test_list_schema_parses_listmonk_response(lst):
     """ListSchema must parse every list Listmonk returns."""
     ListSchema(**lst)

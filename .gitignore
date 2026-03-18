@@ -6,6 +6,13 @@ __pycache__/
 # C extensions
 *.so
 
+# Claude
+skills-lock.json
+services/api/app/handlers/chatwoot.md
+services/pocketbase/migration_schema/pb_schema.json
+.agents/
+.claude/
+
 # Distribution / packaging
 .Python
 build/

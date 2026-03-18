@@ -1,10 +1,8 @@
-import logging
 from typing import override
 
+from app.context import enrich_wide_event
 from app.handlers.base import MessengerHandlerBase
 from app.schemas import MessengerPayload
-
-logger = logging.getLogger(__name__)
 
 
 class FakeHandler(MessengerHandlerBase):
@@ -17,11 +15,9 @@ class FakeHandler(MessengerHandlerBase):
     @override
     def send(self, payload: MessengerPayload) -> None:
         self.received.append(payload)
-        logger.info(
-            'fake_handler.send',
-            extra={
-                'campaign': payload.campaign.name,
-                'subject': payload.subject,
-                'recipients': len(payload.recipients),
-            },
-        )
+        enrich_wide_event({
+            'handler': 'fake',
+            'campaign': payload.campaign.name,
+            'subject': payload.subject,
+            'recipients': len(payload.recipients),
+        })
