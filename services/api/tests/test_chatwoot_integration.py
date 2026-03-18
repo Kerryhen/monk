@@ -1,0 +1,221 @@
+# tests/test_chatwoot_integration.py
+"""Integration tests for ChatwootHandler.
+
+PocketBase dev is hit for real; all Chatwoot HTTP calls are intercepted by mock.
+_process_all() is called directly (synchronous) to avoid threading races.
+"""
+
+import json
+from http import HTTPStatus
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from app.handlers.chatwoot.handler import ChatwootHandler
+from app.handlers.resolver import DefaultVariableResolver
+from app.schemas import MessengerCampaignMeta, MessengerPayload, MessengerRecipient
+
+# Number of Chatwoot API calls for a new contact (search + create + conversation + message)
+CHATWOOT_CALLS_NEW_CONTACT = 3
+
+# --------------------------------------------------------------------------- #
+# Template body — instancia.* fields use :<default> so tests work without
+# an `instancias` PocketBase record (handler returns {} on error).
+# --------------------------------------------------------------------------- #
+TEMPLATE_BODY = json.dumps({
+    'template_name': 'cobranca_v2',
+    'language': 'pt_BR',
+    'category': 'UTILITY',
+    'params': {
+        'body': {
+            '1': 'lead.name:amigo',
+            '2': 'campanha.subject:assunto',
+            '3': 'instancia.razao_social:Empresa',
+        },
+        'buttons': [],
+    },
+})
+
+# --------------------------------------------------------------------------- #
+# Fixtures
+# --------------------------------------------------------------------------- #
+
+
+@pytest.fixture
+def handler():
+    return ChatwootHandler(resolver=DefaultVariableResolver())
+
+
+@pytest.fixture
+def recipient():
+    return MessengerRecipient(
+        uuid='r-integration-001',
+        email='joao@example.com',
+        name='João Integration',
+        attribs={'phone': '+5511999999999'},
+        status='enabled',
+    )
+
+
+@pytest.fixture
+def integration_payload(recipient):
+    return MessengerPayload(
+        subject='Fatura de integração',
+        body=TEMPLATE_BODY,
+        content_type='plain',
+        campaign=MessengerCampaignMeta(
+            uuid='camp-integration-001',
+            name='Cobrança Integration',
+            tags=['cobranca', 'instance:mxf'],
+        ),
+        recipients=[recipient],
+    )
+
+
+@pytest.fixture
+def chatwoot_session():
+    """Mock requests.Session that simulates a successful Chatwoot API flow."""
+    session = MagicMock()
+
+    search_resp = MagicMock(ok=True)
+    search_resp.json.return_value = {'payload': []}
+    session.get.return_value = search_resp
+
+    create_contact = MagicMock(ok=True)
+    create_contact.json.return_value = {'id': 42}
+    create_conv = MagicMock(ok=True)
+    create_conv.json.return_value = {'id': 99}
+    send_msg = MagicMock(ok=True)
+    session.post.side_effect = [create_contact, create_conv, send_msg]
+
+    return session
+
+
+# --------------------------------------------------------------------------- #
+# Full flow — reads real PocketBase config
+# --------------------------------------------------------------------------- #
+
+
+def test_full_flow_reads_pb_config(handler, integration_payload, chatwoot_session):
+    """_process_all fetches the real mxf config from PocketBase and sends 3 Chatwoot calls."""
+    with patch('app.handlers.chatwoot.handler.requests.Session', return_value=chatwoot_session):
+        handler._process_all(integration_payload)
+
+    # contact search + contact create + conversation + message
+    assert chatwoot_session.get.call_count == 1
+    assert chatwoot_session.post.call_count == CHATWOOT_CALLS_NEW_CONTACT
+
+
+def test_resolved_variables_in_chatwoot_payload(handler, integration_payload, chatwoot_session):
+    """processed_params in the message body must contain resolved variable values."""
+    with patch('app.handlers.chatwoot.handler.requests.Session', return_value=chatwoot_session):
+        handler._process_all(integration_payload)
+
+    # The 3rd POST is the message call — inspect its json kwarg
+    msg_call = chatwoot_session.post.call_args_list[2]
+    body = msg_call.kwargs.get('json') or msg_call.args[1] if len(msg_call.args) > 1 else msg_call.kwargs['json']
+    processed = body['template_params']['processed_params']
+
+    assert processed['1'] == 'João Integration'  # lead.name
+    assert processed['2'] == 'Fatura de integração'  # campanha.subject
+    # instancia.razao_social falls back to default since `instancias` collection is absent
+    assert processed['3'] == 'Empresa'
+
+
+def test_instancia_fallback_default_used(handler, chatwoot_session):
+    """When instancias has no record, template defaults are applied and recipient is not skipped."""
+    payload = MessengerPayload(
+        subject='Test fallback',
+        body=TEMPLATE_BODY,
+        content_type='plain',
+        campaign=MessengerCampaignMeta(uuid='c-fb', name='Fallback', tags=['instance:mxf']),
+        recipients=[
+            MessengerRecipient(
+                uuid='r-fb', email='fb@x.com', name='Fallback User', attribs={'phone': '+5511000000000'}, status='enabled'
+            )
+        ],
+    )
+
+    with patch('app.handlers.chatwoot.handler.requests.Session', return_value=chatwoot_session):
+        handler._process_all(payload)
+
+    # All Chatwoot calls must have been made — recipient was NOT skipped
+    assert chatwoot_session.post.call_count == CHATWOOT_CALLS_NEW_CONTACT
+
+
+# --------------------------------------------------------------------------- #
+# Skip conditions — real PB config, selective mocking
+# --------------------------------------------------------------------------- #
+
+
+def test_recipient_missing_phone_skipped(handler, chatwoot_session):
+    """A recipient without attribs.phone must be skipped — zero Chatwoot calls."""
+    payload = MessengerPayload(
+        subject='No phone',
+        body=TEMPLATE_BODY,
+        content_type='plain',
+        campaign=MessengerCampaignMeta(uuid='c-np', name='No Phone', tags=['instance:mxf']),
+        recipients=[MessengerRecipient(uuid='r-np', email='np@x.com', name='No Phone', attribs={}, status='enabled')],
+    )
+
+    with patch('app.handlers.chatwoot.handler.requests.Session', return_value=chatwoot_session):
+        handler._process_all(payload)
+
+    chatwoot_session.get.assert_not_called()
+    chatwoot_session.post.assert_not_called()
+
+
+def test_unknown_instance_skips_all(handler, chatwoot_session):
+    """An instance tag that has no PocketBase config must abort without any Chatwoot calls."""
+    payload = MessengerPayload(
+        subject='Unknown instance',
+        body=TEMPLATE_BODY,
+        content_type='plain',
+        campaign=MessengerCampaignMeta(uuid='c-unk', name='Unknown', tags=['instance:nonexistent_xyz_9999']),
+        recipients=[MessengerRecipient(uuid='r-unk', email='u@x.com', name='U', attribs={'phone': '+55'}, status='enabled')],
+    )
+
+    with patch('app.handlers.chatwoot.handler.requests.Session', return_value=chatwoot_session):
+        handler._process_all(payload)
+
+    chatwoot_session.post.assert_not_called()
+
+
+def test_invalid_body_skips_all(handler, chatwoot_session):
+    """A non-JSON body must cause _process_all to abort before any Chatwoot call."""
+    payload = MessengerPayload(
+        subject='Bad body',
+        body='not valid json {{ }}',
+        content_type='plain',
+        campaign=MessengerCampaignMeta(uuid='c-bad', name='Bad', tags=['instance:mxf']),
+        recipients=[MessengerRecipient(uuid='r-bad', email='b@x.com', name='B', attribs={'phone': '+55'}, status='enabled')],
+    )
+
+    with patch('app.handlers.chatwoot.handler.requests.Session', return_value=chatwoot_session):
+        handler._process_all(payload)
+
+    chatwoot_session.post.assert_not_called()
+
+
+# --------------------------------------------------------------------------- #
+# HTTP endpoint contract
+# --------------------------------------------------------------------------- #
+
+
+def test_endpoint_returns_200_immediately(client):
+    """POST /v1/messenger/chatwoot must return 200 {"status": "ok"} before processing."""
+    payload = {
+        'subject': 'Endpoint test',
+        'body': TEMPLATE_BODY,
+        'content_type': 'plain',
+        'recipients': [{'uuid': 'r-ep', 'email': 'ep@x.com', 'name': 'EP', 'attribs': {'phone': '+55'}, 'status': 'enabled'}],
+        'campaign': {'uuid': 'c-ep', 'name': 'EP Campaign', 'tags': ['instance:mxf']},
+        'attachments': [],
+    }
+
+    with patch('app.handlers.chatwoot.handler.Thread') as mock_thread:
+        response = client.post('/v1/messenger/chatwoot', json=payload)
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.json() == {'status': 'ok'}
+    mock_thread.return_value.start.assert_called_once()
