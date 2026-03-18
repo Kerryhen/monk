@@ -1,5 +1,6 @@
 # tests/test_e2e.py
 """Full point-to-point flow tests: new client → import subscribers → run campaign."""
+
 from http import HTTPStatus
 
 import pytest
