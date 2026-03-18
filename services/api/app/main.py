@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 from .context import enrich_wide_event
 from .logging_config import configure_logging
 from .middleware import WideEventMiddleware
-from .routers import campaign, client, leads, lists, messenger
+from .routers import campaign, channels, client, leads, lists, messenger
 from .settings import Settings
 from .telemetry import configure_telemetry
 
@@ -48,5 +48,6 @@ v1.include_router(lists.router)
 v1.include_router(campaign.router)
 v1.include_router(leads.router)
 v1.include_router(messenger.router)
+v1.include_router(channels.router)
 
 app.include_router(v1)

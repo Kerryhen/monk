@@ -134,5 +134,33 @@
     ],
     "indexes": [],
     "system": false
+  },
+  {
+    "name": "monk_channel_configs",
+    "type": "base",
+    "fields": [
+      {
+        "name": "instance_id",
+        "type": "text",
+        "required": true
+      },
+      {
+        "name": "handler",
+        "type": "text",
+        "required": true
+      },
+      {
+        "name": "channel",
+        "type": "text",
+        "required": true
+      },
+      {
+        "name": "config",
+        "type": "json",
+        "required": true
+      }
+    ],
+    "indexes": [],
+    "system": false
   }
 ]

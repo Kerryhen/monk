@@ -2,6 +2,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
+from app.handlers.fake import FakeHandler
 from app.interface import interface
 from app.main import app
 from app.schemas import (
@@ -16,6 +17,11 @@ from app.sessions import MonkSession, get_monk_session
 from app.settings import Settings
 
 settings = Settings()
+
+
+@pytest.fixture(autouse=True)
+def clear_fake_handler():
+    FakeHandler.received.clear()
 
 
 @pytest.fixture(scope='session')

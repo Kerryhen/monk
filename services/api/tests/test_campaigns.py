@@ -35,6 +35,11 @@ def test_create_campaign(client, created_campaign):
     assert created_campaign['status'] == 'draft'
 
 
+def test_create_campaign_injects_instance_tag(created_campaign):
+    tags = created_campaign.get('tags') or []
+    assert 'instance:mxf' in tags
+
+
 def test_get_campaigns(client, created_campaign):
     response = client.get('/v1/campaign/', headers=MXF)
     assert response.status_code == HTTPStatus.OK

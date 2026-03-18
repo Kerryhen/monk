@@ -199,8 +199,12 @@ class Interface:
                     detail=f'List {list_id} does not belong to client "{payload.client.id}"',
                 )
 
+        campaign_data = payload.campaign.model_dump(mode='json')
+        instance_tag = f'instance:{payload.client.id}'
+        campaign_data['tags'] = list(campaign_data.get('tags') or []) + [instance_tag]
+
         try:
-            response = self.__monk_campaigns.post(payload.campaign.model_dump(mode='json'))
+            response = self.__monk_campaigns.post(campaign_data)
         except requests.RequestException as e:
             enrich_wide_event({
                 'operation': 'create_campaign',
