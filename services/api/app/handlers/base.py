@@ -19,8 +19,13 @@ class TemplateProviderBase(ABC):
 
 class SchemaProviderBase(ABC):
     @abstractmethod
+    def get_schemas(self) -> dict[str, dict]:
+        """Return all schemas keyed by source name."""
+        ...
+
+    @abstractmethod
     def get_schema(self, name: str) -> dict:
-        """Return schema for the given source name. Raise if not found."""
+        """Return schema for the given source name. Raise KeyError if not found."""
         ...
 
 
