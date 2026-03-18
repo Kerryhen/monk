@@ -1,7 +1,6 @@
 import csv
 import io
 import json
-import logging
 from http import HTTPStatus
 from typing import Annotated, Optional
 
@@ -9,6 +8,7 @@ import requests
 from fastapi import Depends, HTTPException
 from pocketbase.errors import ClientResponseError
 
+from app.context import enrich_wide_event
 from app.schemas import (
     CampaignSchema,
     ClientInfoSchema,
@@ -27,8 +27,6 @@ from app.schemas import (
 )
 from app.sessions import Monk, PocketBaseSession, get_pocketbase_session
 from app.settings import Settings
-
-logger = logging.getLogger(__name__)
 
 settings = Settings()
 url_monk = f'{settings.LISTMONK_API_URL}/lists'
@@ -104,7 +102,11 @@ class Interface:
         try:
             response = self.__monk.post(payload.list.model_dump())
         except requests.RequestException as e:
-            logger.error('create_list.unreachable', extra={'client': client, 'error': str(e)})
+            enrich_wide_event({
+                'operation': 'create_list',
+                'client_id': client,
+                'error': {'type': 'service_unavailable', 'message': str(e)},
+            })
             raise HTTPException(
                 status_code=HTTPStatus.SERVICE_UNAVAILABLE,
                 detail=f'Could not reach Listmonk API: {e}',
@@ -118,13 +120,17 @@ class Interface:
             updates['default_list'] = list_id
         self.__pb.client.collection('monk_client_lists').update(client_id, updates)
 
-        logger.info('create_list.ok', extra={'client': client, 'list_id': list_id, 'list_name': result['data']['name']})
+        enrich_wide_event({
+            'operation': 'create_list',
+            'client_id': client,
+            'list': {'id': list_id, 'name': result['data']['name']},
+        })
         return ListSchema(**result['data'])
 
     def get_lists(self, client: ClientSchema) -> list[ListSchema]:
         result = self.__pb.client.collection('monk_client_lists').get_list(1, 1, {'filter': f'client="{client.id}"'})
         if result.total_items == 0:
-            logger.info('get_lists.ok', extra={'client': client.id, 'count': 0})
+            enrich_wide_event({'operation': 'get_lists', 'client_id': client.id, 'count': 0})
             return []
         client_list_ids = [str(lid) for lid in result.items[0].lists]
 
@@ -133,7 +139,7 @@ class Interface:
         all_lists = response.json()['data']['results'] or []
 
         filtered = [ListSchema(**lst) for lst in all_lists if str(lst['id']) in client_list_ids]
-        logger.info('get_lists.ok', extra={'client': client.id, 'count': len(filtered)})
+        enrich_wide_event({'operation': 'get_lists', 'client_id': client.id, 'count': len(filtered)})
         return filtered
 
     def get_client(self, client: ClientSchema) -> ClientInfoSchema:
@@ -141,7 +147,7 @@ class Interface:
         if result.total_items == 0:
             raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail=f'Client "{client.id}" not found')
         record = result.items[0]
-        logger.info('get_client.ok', extra={'client': client.id})
+        enrich_wide_event({'operation': 'get_client', 'client_id': client.id})
         return ClientInfoSchema(
             id=client.id,
             default_list=int(record.default_list) if record.default_list else None,
@@ -162,7 +168,7 @@ class Interface:
 
         self.__monk.delete(params=params.model_dump(exclude_none=True, exclude={'client'}))
 
-        logger.info('delete_list.ok', extra={'client': params.client.id, 'ids': params.id})
+        enrich_wide_event({'operation': 'delete_list', 'client_id': params.client.id, 'list_ids': params.id})
         return DeleteResponseSchema(data=True)
 
     def update_list(self, list_id, payload: UpdateListSchema) -> ResponseUpdateListSchema:
@@ -172,7 +178,7 @@ class Interface:
         )
 
         # monk_lists only stores the id; no extra fields to sync
-        logger.info('update_list.ok', extra={'client': payload.client.id, 'list_id': list_id})
+        enrich_wide_event({'operation': 'update_list', 'client_id': payload.client.id, 'list_id': list_id})
         return ResponseUpdateListSchema(**response.json())
 
     # -------------------------------------------------------------------------
@@ -183,10 +189,11 @@ class Interface:
         client_list_ids = self._get_client_list_ids(payload.client.id)
         for list_id in payload.campaign.lists:
             if str(list_id) not in client_list_ids:
-                logger.error(
-                    'create_campaign.forbidden',
-                    extra={'client': payload.client.id, 'list_id': list_id},
-                )
+                enrich_wide_event({
+                    'operation': 'create_campaign',
+                    'client_id': payload.client.id,
+                    'error': {'type': 'forbidden', 'list_id': list_id},
+                })
                 raise HTTPException(
                     status_code=HTTPStatus.FORBIDDEN,
                     detail=f'List {list_id} does not belong to client "{payload.client.id}"',
@@ -195,17 +202,22 @@ class Interface:
         try:
             response = self.__monk_campaigns.post(payload.campaign.model_dump(mode='json'))
         except requests.RequestException as e:
-            logger.error('create_campaign.unreachable', extra={'client': payload.client.id, 'error': str(e)})
+            enrich_wide_event({
+                'operation': 'create_campaign',
+                'client_id': payload.client.id,
+                'error': {'type': 'service_unavailable', 'message': str(e)},
+            })
             raise HTTPException(
                 status_code=HTTPStatus.SERVICE_UNAVAILABLE,
                 detail=f'Could not reach Listmonk API: {e}',
             )
         self._raise_for_listmonk(response)
         data = response.json()['data']
-        logger.info(
-            'create_campaign.ok',
-            extra={'client': payload.client.id, 'campaign_id': data['id'], 'campaign_name': data['name']},
-        )
+        enrich_wide_event({
+            'operation': 'create_campaign',
+            'client_id': payload.client.id,
+            'campaign': {'id': data['id'], 'name': data['name']},
+        })
         return CampaignSchema(**data)
 
     def get_campaigns(self, client: ClientSchema) -> list[CampaignSchema]:
@@ -218,7 +230,7 @@ class Interface:
         filtered = [
             CampaignSchema(**c) for c in all_campaigns if any(str(lst['id']) in client_list_ids for lst in c.get('lists', []))
         ]
-        logger.info('get_campaigns.ok', extra={'client': client.id, 'count': len(filtered)})
+        enrich_wide_event({'operation': 'get_campaigns', 'client_id': client.id, 'count': len(filtered)})
         return filtered
 
     def update_campaign(self, campaign_id: int, payload: UpdateCampaignSchema) -> ResponseCampaignSchema:
@@ -241,7 +253,7 @@ class Interface:
 
         response = self.__monk_campaigns.put(merged, path=f'/{campaign_id}')
         self._raise_for_listmonk(response)
-        logger.info('update_campaign.ok', extra={'client': payload.client.id, 'campaign_id': campaign_id})
+        enrich_wide_event({'operation': 'update_campaign', 'client_id': payload.client.id, 'campaign_id': campaign_id})
         return ResponseCampaignSchema(data=CampaignSchema(**response.json()['data']))
 
     def delete_campaign(self, campaign_id: int, client: ClientSchema) -> DeleteResponseSchema:
@@ -250,7 +262,7 @@ class Interface:
 
         response = self.__monk_campaigns.delete({}, path=f'/{campaign_id}')
         self._raise_for_listmonk(response)
-        logger.info('delete_campaign.ok', extra={'client': client.id, 'campaign_id': campaign_id})
+        enrich_wide_event({'operation': 'delete_campaign', 'client_id': client.id, 'campaign_id': campaign_id})
         return DeleteResponseSchema(data=True)
 
     def set_campaign_status(self, campaign_id: int, status: str, client: ClientSchema) -> CampaignSchema:
@@ -260,7 +272,12 @@ class Interface:
         response = self.__monk_campaigns.put({'status': status}, path=f'/{campaign_id}/status')
         self._raise_for_listmonk(response)
         data = response.json()['data']
-        logger.info('set_campaign_status.ok', extra={'client': client.id, 'campaign_id': campaign_id, 'status': data['status']})
+        enrich_wide_event({
+            'operation': 'set_campaign_status',
+            'client_id': client.id,
+            'campaign_id': campaign_id,
+            'status': data['status'],
+        })
         return CampaignSchema(**data)
 
     # -------------------------------------------------------------------------
@@ -269,7 +286,7 @@ class Interface:
 
     def _get_or_create_default_list(self, client: ClientSchema) -> int:
         """Auto-creates the client and a default list if they do not exist yet."""
-        logger.info('import_subscribers.auto_create_client', extra={'client': client.id})
+        enrich_wide_event({'auto_created_client': True, 'client_id': client.id})
         list_obj = self.create_list(
             CreateListSchema(
                 client=client,
@@ -293,7 +310,7 @@ class Interface:
         client_list_ids = [str(lid) for lid in record.lists]
         if list_id is not None:
             if str(list_id) not in client_list_ids:
-                logger.error('import_subscribers.list_not_found', extra={'client': client.id, 'list_id': list_id})
+                enrich_wide_event({'error': {'type': 'list_not_found', 'client_id': client.id, 'list_id': list_id}})
                 raise HTTPException(
                     status_code=HTTPStatus.NOT_FOUND,
                     detail=f'List {list_id} not found or does not belong to client "{client.id}"',
@@ -316,7 +333,7 @@ class Interface:
                 data={'params': params},
             )
         except requests.RequestException as e:
-            logger.error('import_subscribers.unreachable', extra={'client': client.id, 'error': str(e)})
+            enrich_wide_event({'error': {'type': 'service_unavailable', 'client_id': client.id, 'message': str(e)}})
             raise HTTPException(status_code=HTTPStatus.SERVICE_UNAVAILABLE, detail=f'Could not reach Listmonk API: {e}')
         self._raise_for_listmonk(response)
         return response.json()
@@ -324,7 +341,12 @@ class Interface:
     def import_subscribers(self, client: ClientSchema, file_bytes: bytes, filename: str, list_id: Optional[int] = None) -> dict:
         target_list = self._resolve_target_list(client, list_id)
         result = self._post_csv_to_listmonk(client, file_bytes, filename, target_list)
-        logger.info('import_subscribers.ok', extra={'client': client.id, 'target_list': target_list, 'file': filename})
+        enrich_wide_event({
+            'operation': 'import_subscribers',
+            'client_id': client.id,
+            'target_list': target_list,
+            'file': filename,
+        })
         return result
 
     def import_subscribers_json(
@@ -340,24 +362,32 @@ class Interface:
         file_bytes = buf.getvalue().encode()
 
         result = self._post_csv_to_listmonk(client, file_bytes, 'import.csv', target_list)
-        logger.info('import_subscribers_json.ok', extra={'client': client.id, 'target_list': target_list, 'count': len(items)})
+        enrich_wide_event({
+            'operation': 'import_subscribers_json',
+            'client_id': client.id,
+            'target_list': target_list,
+            'count': len(items),
+        })
         return result
 
     def delete_subscriber_by_email(self, email: str) -> None:
         response = self.__monk_subscribers_single.get({'query': f"subscribers.email='{email}'"})
         if not response.ok:
-            logger.warning('delete_subscriber_by_email.query_failed', extra={'email': email})
+            enrich_wide_event({'operation': 'delete_subscriber', 'error': {'type': 'query_failed', 'email': email}})
             return
         results = response.json().get('data', {}).get('results') or []
         if not results:
-            logger.warning('delete_subscriber_by_email.not_found', extra={'email': email})
+            enrich_wide_event({'operation': 'delete_subscriber', 'error': {'type': 'not_found', 'email': email}})
             return
         subscriber_id = results[0]['id']
         del_response = self.__monk_subscribers_single.delete({}, path=f'/{subscriber_id}')
         if del_response.ok:
-            logger.info('delete_subscriber_by_email.ok', extra={'email': email, 'subscriber_id': subscriber_id})
+            enrich_wide_event({'operation': 'delete_subscriber', 'email': email, 'subscriber_id': subscriber_id})
         else:
-            logger.warning('delete_subscriber_by_email.delete_failed', extra={'email': email, 'subscriber_id': subscriber_id})
+            enrich_wide_event({
+                'operation': 'delete_subscriber',
+                'error': {'type': 'delete_failed', 'email': email, 'subscriber_id': subscriber_id},
+            })
 
 
 interface = Interface(MonkLists, MonkCampaigns, MonkSubscribers, MonkSubscribersSingle, get_pocketbase_session())
