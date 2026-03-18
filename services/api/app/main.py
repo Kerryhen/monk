@@ -10,6 +10,7 @@ from .logging_config import configure_logging
 from .middleware import WideEventMiddleware
 from .routers import campaign, client, leads, lists, messenger
 from .settings import Settings
+from .telemetry import configure_telemetry
 
 configure_logging()
 
@@ -24,6 +25,10 @@ app.add_middleware(
     allow_methods=['*'],
     allow_headers=['*'],
 )
+
+# Must be called after middleware is registered: instrument_app() adds its own
+# middleware and must be outermost so spans are active when WideEventMiddleware logs.
+configure_telemetry(app)
 
 
 @app.exception_handler(Exception)

@@ -7,17 +7,24 @@ The API uses Python's stdlib `logging` module with **wide events** (canonical lo
 ```
 Request
   │
+  ├─ OpenTelemetryMiddleware (when OTEL_EXPORTER_OTLP_ENDPOINT is set)
+  │    • outermost — starts root span; exports via OTLP/gRPC
+  │
   ├─ WideEventMiddleware (app/middleware.py)
   │    • generates request_id
   │    • initialises wide_event dict with HTTP + env context
   │    • stores dict in ContextVar (propagates to threadpool threads)
   │    • emits single JSON log in finally block (INFO / ERROR)
+  │    • when OTel is active: otelTraceID/otelSpanID injected automatically
+  │      by LoggingInstrumentor into the log record
   │
   ├─ Route handler
   │
   └─ Interface method (app/interface.py)
        • calls enrich_wide_event() with operation + business context
        • no logger import needed
+       • outbound requests.Session calls produce child spans automatically
+         via RequestsInstrumentor
 ```
 
 ## Logging setup
@@ -159,24 +166,41 @@ Python's `LogRecord` has built-in attributes that cannot be used as `extra=` key
 
 `name`, `msg`, `args`, `levelname`, `levelno`, `pathname`, `filename`, `module`, `lineno`, `funcName`, `created`, `msecs`, `thread`, `threadName`, `process`, `processName`, `message`, `asctime`
 
-## Adding OpenTelemetry (future)
+## OpenTelemetry
 
-When ready, install the SDK and update only `app/logging_config.py`:
+OTel is opt-in: set `OTEL_EXPORTER_OTLP_ENDPOINT` in Doppler to activate it.
+When the env var is absent the app runs without tracing and the wide event schema is unchanged.
 
 ```bash
-pdm add opentelemetry-sdk opentelemetry-instrumentation-logging opentelemetry-instrumentation-fastapi
+# Doppler — enable tracing (gRPC endpoint)
+OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
 ```
+
+`app/telemetry.py` is called from `main.py` after middleware registration:
 
 ```python
-# app/logging_config.py
-from opentelemetry.instrumentation.logging import LoggingInstrumentor
-
-def configure_logging() -> None:
-    LoggingInstrumentor().instrument()   # bridges stdlib logging → OTel
-    handler = logging.StreamHandler()
-    handler.setFormatter(_JSONFormatter())
-    logging.root.setLevel(logging.INFO)
-    logging.root.handlers = [handler]
+configure_telemetry(app)   # no-op when env var absent
 ```
 
-All `extra=` fields on existing log calls become OTel span attributes automatically. No other files need to change.
+### What gets instrumented
+
+| Component | Instrumentation | Result |
+|-----------|----------------|--------|
+| FastAPI | `FastAPIInstrumentor` | root span per HTTP request |
+| `requests` library | `RequestsInstrumentor` | child span per Listmonk call |
+| stdlib `logging` | `LoggingInstrumentor` | `otelTraceID`/`otelSpanID` injected into every log record |
+
+### Trace correlation in logs
+
+When OTel is active, the wide event automatically includes trace context:
+
+```json
+{
+  "otelTraceID": "4bf92f3577b34da6a3ce929d0e0e4736",
+  "otelSpanID": "00f067aa0ba902b7",
+  "otelServiceName": "monk-api",
+  "otelTraceSampled": true
+}
+```
+
+No call-site changes are needed — `_JSONFormatter` picks up these fields from the log record the same way it picks up any other `extra=` field.
