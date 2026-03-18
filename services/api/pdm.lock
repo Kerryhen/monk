@@ -5,7 +5,7 @@
 groups = ["default"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:e9e6190b08593c4b8941a2c77b4af58c7a73335f07caa73f6321852bc5be3173"
+content_hash = "sha256:141d2a7c68efa4061789ef3e7dcc111b4c99ad090907672545c212db98277f38"
 
 [[metadata.targets]]
 requires_python = ">=3.14"
@@ -1262,6 +1262,16 @@ files = [
     {file = "ruff-0.14.14-py3-none-win_amd64.whl", hash = "sha256:3dde1435e6b6fe5b66506c1dff67a421d0b7f6488d466f651c07f4cab3bf20fd"},
     {file = "ruff-0.14.14-py3-none-win_arm64.whl", hash = "sha256:56e6981a98b13a32236a72a8da421d7839221fa308b223b9283312312e5ac76c"},
     {file = "ruff-0.14.14.tar.gz", hash = "sha256:2d0f819c9a90205f3a867dbbd0be083bee9912e170fd7d9704cc8ae45824896b"},
+]
+
+[[package]]
+name = "scalar-fastapi"
+version = "1.8.1"
+summary = "This plugin provides an easy way to render a beautiful API reference based on a OpenAPI/Swagger file with FastAPI."
+groups = ["default"]
+files = [
+    {file = "scalar_fastapi-1.8.1-py3-none-any.whl", hash = "sha256:0ff296877d65082039eba8682fef6eafbe1cd77c5b55a3b3c0b96681eb15ca62"},
+    {file = "scalar_fastapi-1.8.1.tar.gz", hash = "sha256:eadb625d386fa94a79e5463af0aa6bcf5e02bc4d665454ed0795960987152531"},
 ]
 
 [[package]]

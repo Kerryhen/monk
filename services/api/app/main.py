@@ -4,6 +4,7 @@ from importlib.metadata import version
 from fastapi import APIRouter, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from scalar_fastapi import get_scalar_api_reference
 
 from .context import enrich_wide_event
 from .logging_config import configure_logging
@@ -15,7 +16,7 @@ from .telemetry import configure_telemetry
 configure_logging()
 
 settings = Settings()
-app = FastAPI(version=version('listmonk'))
+app = FastAPI(version=version('listmonk'), docs_url=None, redoc_url=None)
 
 app.add_middleware(WideEventMiddleware)
 app.add_middleware(
@@ -29,6 +30,11 @@ app.add_middleware(
 # Must be called after middleware is registered: instrument_app() adds its own
 # middleware and must be outermost so spans are active when WideEventMiddleware logs.
 configure_telemetry(app)
+
+
+@app.get('/docs', include_in_schema=False)
+async def scalar_docs():
+    return get_scalar_api_reference(openapi_url=app.openapi_url, title=app.title)
 
 
 @app.exception_handler(Exception)
