@@ -1,6 +1,5 @@
 import logging
 import os
-from importlib.metadata import version
 
 from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
@@ -10,6 +9,8 @@ from opentelemetry.instrumentation.requests import RequestsInstrumentor
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
+
+from .context import ENV_CONTEXT
 
 logger = logging.getLogger(__name__)
 
@@ -31,10 +32,15 @@ def configure_telemetry(app) -> None:
     if not endpoint:
         return
 
+    # Derived from ENV_CONTEXT so OTel spans carry identical metadata to wide events.
+    # service.instance.id and service.commit are OTel semantic conventions for the
+    # fields already present in every wide event as instance_id and commit_sha.
     resource = Resource.create({
-        'service.name': 'monk-api',
-        'service.version': version('listmonk'),
-        'deployment.environment': os.environ.get('ENVIRONMENT', 'PRD'),
+        'service.name': ENV_CONTEXT['service'],
+        'service.version': ENV_CONTEXT['version'],
+        'deployment.environment': ENV_CONTEXT['environment'],
+        'service.instance.id': ENV_CONTEXT['instance_id'],
+        'service.commit': ENV_CONTEXT['commit_sha'],
     })
 
     provider = TracerProvider(resource=resource)

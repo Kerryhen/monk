@@ -1,7 +1,20 @@
+import os
 from contextvars import ContextVar
+from importlib.metadata import version
 from typing import Optional
 
 _wide_event_var: ContextVar[Optional[dict]] = ContextVar('wide_event', default=None)
+
+# Single source of truth for environment context.  Consumed by WideEventMiddleware
+# (stamped on every wide event) and configure_telemetry (OTel Resource attributes),
+# so both signals carry identical env metadata.
+ENV_CONTEXT: dict = {
+    'service': 'monk-api',
+    'version': version('listmonk'),
+    'environment': os.environ.get('ENVIRONMENT', 'PRD'),
+    'commit_sha': os.environ.get('COMMIT_SHA', 'unknown'),
+    'instance_id': os.environ.get('HOSTNAME', 'unknown'),
+}
 
 
 def set_wide_event(event: dict) -> None:

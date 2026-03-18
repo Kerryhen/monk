@@ -1,26 +1,15 @@
 import logging
-import os
 import time
 import uuid
-from importlib.metadata import version
 from typing import override
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
-from .context import set_wide_event
+from .context import ENV_CONTEXT, set_wide_event
 
 logger = logging.getLogger(__name__)
-
-# Captured once at startup; same values are stamped on every wide event.
-_ENV_CONTEXT: dict = {
-    'service': 'monk-api',
-    'version': version('listmonk'),
-    'environment': os.environ.get('ENVIRONMENT', 'PRD'),
-    'commit_sha': os.environ.get('COMMIT_SHA', 'unknown'),
-    'instance_id': os.environ.get('HOSTNAME', 'unknown'),
-}
 
 
 class WideEventMiddleware(BaseHTTPMiddleware):
@@ -44,7 +33,7 @@ class WideEventMiddleware(BaseHTTPMiddleware):
             'method': request.method,
             'path': request.url.path,
             'user_agent': request.headers.get('user-agent'),
-            **_ENV_CONTEXT,
+            **ENV_CONTEXT,
         }
         set_wide_event(wide_event)
 
