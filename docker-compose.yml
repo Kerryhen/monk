@@ -16,6 +16,7 @@ services:
       - POCKETBASE_BOT_EMAIL=${POCKETBASE_BOT_EMAIL}
       - POCKETBASE_BOT_PASSWORD=${POCKETBASE_BOT_PASSWORD}
       - POCKETBASE_API_URL=${POCKETBASE_API_URL}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-}
     ports:
       - 8000:8000
     develop:
@@ -92,6 +93,17 @@ services:
       - ./uploads:/listmonk/uploads:rw                        # Mount an uploads directory on the host to /listmonk/uploads inside the container.
                                                               # To use this, change directory path in Admin -> Settings -> Media to /listmonk/uploads
  
+  otel-collector:
+    profiles: [otel]
+    image: otel/opentelemetry-collector-contrib:latest
+    volumes:
+      - ./services/otel/otel-collector.yaml:/etc/otel/config.yaml
+    command: ["--config=/etc/otel/config.yaml"]
+    ports:
+      - "4317:4317"
+    networks:
+      - bridge
+
   listmonk_db:
     image: postgres:17-alpine
     container_name: listmonk_db
