@@ -64,7 +64,7 @@ class PocketBaseSession:
             raise HTTPException(status_code=503, detail=f'PocketBase auth failed: {e}')
 
         if not self.auth_data.is_valid:
-            logger.error('pocketbase.token_invalid')
+            logger.error('pocketbase.token_invalid', extra={'admin': admin})
             raise HTTPException(status_code=401, detail='PocketBase token invalid')
 
 

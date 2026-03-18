@@ -19,6 +19,7 @@ _ENV_CONTEXT: dict = {
     'version': version('listmonk'),
     'environment': os.environ.get('ENVIRONMENT', 'PRD'),
     'commit_sha': os.environ.get('COMMIT_SHA', 'unknown'),
+    'instance_id': os.environ.get('HOSTNAME', 'unknown'),
 }
 
 
@@ -42,6 +43,7 @@ class WideEventMiddleware(BaseHTTPMiddleware):
             'request_id': request_id,
             'method': request.method,
             'path': request.url.path,
+            'user_agent': request.headers.get('user-agent'),
             **_ENV_CONTEXT,
         }
         set_wide_event(wide_event)
