@@ -97,7 +97,7 @@ services:
     profiles: [otel]
     image: grafana/otel-lgtm:latest
     ports:
-      - "3000:3000"   # Grafana UI
+      - "3005:3000"   # Grafana UI
       - "4317:4317"   # OTLP/gRPC receiver
     networks:
       - bridge
@@ -113,7 +113,7 @@ services:
     environment:
       <<: *listmonk_db-credentials
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U listmonk"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
       interval: 10s
       timeout: 5s
       retries: 6
