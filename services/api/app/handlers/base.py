@@ -12,8 +12,8 @@ class MessengerHandlerBase(ABC):
 
 class TemplateProviderBase(ABC):
     @abstractmethod
-    def get_templates(self) -> list[dict]:
-        """Return list of available templates."""
+    def get_templates(self, config: dict) -> list[dict]:
+        """Return list of available templates for the given channel config."""
         ...
 
 

@@ -1,8 +1,11 @@
 from http import HTTPStatus
+from typing import Annotated
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
+from pocketbase.errors import ClientResponseError
 
 from app.handlers import get_schema_provider, get_template_provider
+from app.sessions import get_pocketbase_session
 
 router = APIRouter(prefix='/channels', tags=['channels'])
 
@@ -22,5 +25,15 @@ def get_schema(handler: str, channel: str, name: str) -> dict:
 
 
 @router.get('/{handler}/{channel}/templates')
-def list_templates(handler: str, channel: str) -> list:
-    return get_template_provider(handler, channel).get_templates()
+def list_templates(handler: str, channel: str, instance_id: Annotated[str, Query()]) -> list:
+    pb = get_pocketbase_session()
+    try:
+        record = pb.client.collection('monk_channel_configs').get_first_list_item(
+            f'instance_id="{instance_id}" && handler="{handler}" && channel="{channel}"'
+        )
+    except ClientResponseError:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail=f'No config for instance "{instance_id}" handler="{handler}" channel="{channel}"',
+        )
+    return get_template_provider(handler, channel).get_templates(record.config)
