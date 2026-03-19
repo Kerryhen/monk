@@ -21,6 +21,11 @@ extend-exclude = ['migrations']
 preview = true
 select = ['I', 'F', 'E', 'W', 'PL', 'PT', 'FAST']
 
+[tool.ruff.lint.per-file-ignores]
+# OTel SDK exposes its logging API via private modules (_logs, _log_exporter) at
+# the installed SDK version — no public opentelemetry.sdk.logs module exists yet.
+'app/telemetry.py' = ['PLC2701']
+
 [tool.ruff.format]
 preview = true
 quote-style = 'single'

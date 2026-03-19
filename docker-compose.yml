@@ -93,14 +93,12 @@ services:
       - ./uploads:/listmonk/uploads:rw                        # Mount an uploads directory on the host to /listmonk/uploads inside the container.
                                                               # To use this, change directory path in Admin -> Settings -> Media to /listmonk/uploads
  
-  otel-collector:
+  lgtm:
     profiles: [otel]
-    image: otel/opentelemetry-collector-contrib:latest
-    volumes:
-      - ./services/otel/otel-collector.yaml:/etc/otel/config.yaml
-    command: ["--config=/etc/otel/config.yaml"]
+    image: grafana/otel-lgtm:latest
     ports:
-      - "4317:4317"
+      - "3000:3000"   # Grafana UI
+      - "4317:4317"   # OTLP/gRPC receiver
     networks:
       - bridge
 
