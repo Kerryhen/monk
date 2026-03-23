@@ -10,16 +10,16 @@ from app.handlers.resolver import DefaultVariableResolver
 # Pre-configured singleton instances (PROB-02/ALT-B).
 HANDLERS: dict[str, MessengerHandlerBase] = {
     'fake': FakeHandler(),
-    'chatwoot': ChatwootHandler(resolver=DefaultVariableResolver()),
+    'chat': ChatwootHandler(resolver=DefaultVariableResolver()),
 }
 
 # Provider registries keyed by (handler, channel).
 # Parametrized from the start to avoid breaking URL changes later (PROB-09).
 SCHEMA_PROVIDERS: dict[tuple[str, str], SchemaProviderBase] = {
-    ('chatwoot', 'whatsapp'): ChatwootSchemaProvider(),
+    ('chat', 'whatsapp'): ChatwootSchemaProvider(),
 }
 TEMPLATE_PROVIDERS: dict[tuple[str, str], TemplateProviderBase] = {
-    ('chatwoot', 'whatsapp'): ChatwootTemplateProvider(),
+    ('chat', 'whatsapp'): ChatwootTemplateProvider(),
 }
 
 

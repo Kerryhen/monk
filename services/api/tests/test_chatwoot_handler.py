@@ -342,7 +342,7 @@ _E2E_VARS = ['TEST_CHATWOOT_INSTANCE_ID', 'TEST_CHATWOOT_PHONE', 'TEST_CHATWOOT_
     reason='requires TEST_CHATWOOT_INSTANCE_ID, TEST_CHATWOOT_PHONE, TEST_CHATWOOT_TEMPLATE',
 )
 def test_chatwoot_e2e_sends_via_messenger(client):
-    """E2E: POST /v1/messenger/chatwoot runs through real PocketBase and Chatwoot API."""
+    """E2E: POST /v1/messenger/chat runs through real PocketBase and Chatwoot API."""
     instance_id = os.environ['TEST_CHATWOOT_INSTANCE_ID']
     phone = os.environ['TEST_CHATWOOT_PHONE']
     template = os.environ['TEST_CHATWOOT_TEMPLATE']
@@ -379,7 +379,7 @@ def test_chatwoot_e2e_sends_via_messenger(client):
         patch('app.handlers.chatwoot.handler.Thread', _SyncThread),
         patch('app.handlers.chatwoot.handler.enrich_wide_event', side_effect=captured.update),
     ):
-        response = client.post('/v1/messenger/chatwoot', json=payload)
+        response = client.post('/v1/messenger/chat', json=payload)
 
     assert response.status_code == HTTPStatus.OK
     assert 'error' not in captured, f'Handler reported error: {captured}'

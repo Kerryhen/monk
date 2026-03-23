@@ -49,7 +49,12 @@ class WideEventMiddleware(BaseHTTPMiddleware):
         finally:
             wide_event['duration_ms'] = round((time.monotonic() - start) * 1000, 1)
             level = logging.ERROR if wide_event.get('outcome') == 'error' else logging.INFO
-            logger.log(level, 'request', extra=wide_event)
+            if wide_event.get('outcome') == 'error':
+                error = wide_event.get('error', {})
+                msg = error.get('message') or f'request failed with {wide_event.get("status_code")}'
+            else:
+                msg = 'request'
+            logger.log(level, msg, extra=wide_event)
 
         response.headers['x-request-id'] = request_id
         return response

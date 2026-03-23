@@ -21,7 +21,7 @@ _HANDLER_TOKEN_KEY = 'api_access_token_user'
 _TEMPLATES_TOKEN_KEY = 'api_access_token_user'
 
 
-def fetch_chatwoot_config(pb, instance_id: str) -> dict | None:
+def fetch_chatwoot_config(pb, instance_id: str, handler: str, channel: str) -> dict | None:
     """Assemble Chatwoot connection config from multiple PocketBase collections.
 
     Returns a dict with keys: url, account_id, inbox_id, phone_attr,
@@ -30,20 +30,20 @@ def fetch_chatwoot_config(pb, instance_id: str) -> dict | None:
     """
     try:
         channel_record = pb.client.collection('monk_channel_configs').get_first_list_item(
-            f'instance_id="{instance_id}" && handler="chatwoot" && channel="whatsapp"'
+            f'instance_id="{instance_id}" && handler="{handler}" && channel="{channel}"'
         )
         extra = channel_record.extra_config
 
         instance_svc = pb.client.collection('instance_services').get_first_list_item(
-            f'instance="{instance_id}" && service.key="chatwoot"'
+            f'instance="{instance_id}" && service.key="{handler}"'
         )
 
         secret_record = pb.client.collection('service_secrets').get_first_list_item(
-            f'instance_service="{instance_svc.id}" && key="chatwoot"'
+            f'instance_service="{instance_svc.id}"'
         )
         secret = secret_record.secret_config
 
-        svc_config = pb.client.collection('common_service_config').get_first_list_item('service.key="chatwoot"')
+        svc_config = pb.client.collection('common_service_config').get_first_list_item(f'service.key="{handler}"')
 
         instance_config = pb.client.collection('conectai_instance_config').get_first_list_item(f'instance="{instance_id}"')
     except ClientResponseError:
@@ -268,7 +268,7 @@ class ChatwootHandler(MessengerHandlerBase):
             return
 
         pb = get_pocketbase_session()
-        config = fetch_chatwoot_config(pb, instance_id)
+        config = fetch_chatwoot_config(pb, instance_id, handler='chat', channel='whatsapp')
         if config is None:
             logger.error('chatwoot.missing_config', extra={'instance_id': instance_id})
             enrich_wide_event({
