@@ -6,6 +6,7 @@ _process_all() is called directly (synchronous) to avoid threading races.
 """
 
 import json
+import os
 from http import HTTPStatus
 from unittest.mock import MagicMock, patch
 
@@ -14,6 +15,8 @@ import pytest
 from app.handlers.chatwoot.handler import ChatwootHandler
 from app.handlers.resolver import DefaultVariableResolver
 from app.schemas import MessengerCampaignMeta, MessengerPayload, MessengerRecipient
+
+_TEST_INSTANCE_ID = os.getenv('TEST_CHATWOOT_INSTANCE_ID', '87v79w2os56q298')
 
 # Number of Chatwoot API calls for a new contact (search + create + conversation + message)
 CHATWOOT_CALLS_NEW_CONTACT = 3
@@ -66,7 +69,7 @@ def integration_payload(recipient):
         campaign=MessengerCampaignMeta(
             uuid='camp-integration-001',
             name='Cobrança Integration',
-            tags=['cobranca', 'instance:87v79w2os56q298'],
+            tags=['cobranca', f'instance:{_TEST_INSTANCE_ID}'],
         ),
         recipients=[recipient],
     )
@@ -128,7 +131,7 @@ def test_instancia_fallback_default_used(handler, chatwoot_session):
         subject='Test fallback',
         body=TEMPLATE_BODY,
         content_type='plain',
-        campaign=MessengerCampaignMeta(uuid='c-fb', name='Fallback', tags=['instance:87v79w2os56q298']),
+        campaign=MessengerCampaignMeta(uuid='c-fb', name='Fallback', tags=[f'instance:{_TEST_INSTANCE_ID}']),
         recipients=[
             MessengerRecipient(
                 uuid='r-fb', email='fb@x.com', name='Fallback User', attribs={'phone': '+5511000000000'}, status='enabled'
@@ -203,7 +206,7 @@ def test_invalid_body_skips_all(handler, chatwoot_session):
 
 
 def test_endpoint_returns_200_immediately(client):
-    """POST /v1/messenger/chatwoot must return 200 {"status": "ok"} before processing."""
+    """POST /v1/messenger/chat must return 200 {"status": "ok"} before processing."""
     payload = {
         'subject': 'Endpoint test',
         'body': TEMPLATE_BODY,
@@ -214,7 +217,7 @@ def test_endpoint_returns_200_immediately(client):
     }
 
     with patch('app.handlers.chatwoot.handler.Thread') as mock_thread:
-        response = client.post('/v1/messenger/chatwoot', json=payload)
+        response = client.post('/v1/messenger/chat', json=payload)
 
     assert response.status_code == HTTPStatus.OK
     assert response.json() == {'status': 'ok'}

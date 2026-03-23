@@ -1,6 +1,9 @@
 # tests/test_channels.py
+import os
 from http import HTTPStatus
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 # ---------------------------------------------------------------------------
 # Schema endpoints (unchanged behaviour)
@@ -8,14 +11,14 @@ from unittest.mock import MagicMock, patch
 
 
 def test_list_schemas_returns_all_sources(client):
-    response = client.get('/v1/channels/chatwoot/whatsapp/schemas')
+    response = client.get('/v1/channels/chat/whatsapp/schemas')
     assert response.status_code == HTTPStatus.OK
     data = response.json()
     assert set(data.keys()) == {'lead', 'campanha', 'instancia'}
 
 
 def test_get_schema_lead_has_expected_fields(client):
-    response = client.get('/v1/channels/chatwoot/whatsapp/schemas/lead')
+    response = client.get('/v1/channels/chat/whatsapp/schemas/lead')
     assert response.status_code == HTTPStatus.OK
     schema = response.json()
     properties = schema.get('properties', {})
@@ -24,7 +27,7 @@ def test_get_schema_lead_has_expected_fields(client):
 
 
 def test_get_schema_campanha_has_expected_fields(client):
-    response = client.get('/v1/channels/chatwoot/whatsapp/schemas/campanha')
+    response = client.get('/v1/channels/chat/whatsapp/schemas/campanha')
     assert response.status_code == HTTPStatus.OK
     properties = response.json().get('properties', {})
     for field in ('uuid', 'name', 'subject', 'tags'):
@@ -32,7 +35,7 @@ def test_get_schema_campanha_has_expected_fields(client):
 
 
 def test_get_schema_unknown_returns_404(client):
-    response = client.get('/v1/channels/chatwoot/whatsapp/schemas/schema_inexistente')
+    response = client.get('/v1/channels/chat/whatsapp/schemas/schema_inexistente')
     assert response.status_code == HTTPStatus.NOT_FOUND
 
 
@@ -42,7 +45,7 @@ def test_unknown_handler_schemas_returns_404(client):
 
 
 # ---------------------------------------------------------------------------
-# Templates endpoint — requires instance_id query param
+# Templates endpoint — requires x-instance-id header
 # ---------------------------------------------------------------------------
 
 _FAKE_CONFIG = {
@@ -65,13 +68,13 @@ _FAKE_INBOXES_RESPONSE = {'payload': [{'id': 8, 'message_templates': [_FAKE_TEMP
 
 
 def test_list_templates_missing_instance_id_returns_422(client):
-    response = client.get('/v1/channels/chatwoot/whatsapp/templates')
+    response = client.get('/v1/channels/chat/whatsapp/templates')
     assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
 
 
 def test_list_templates_unknown_instance_returns_404(client):
     with patch('app.routers.channels.fetch_chatwoot_config', return_value=None):
-        response = client.get('/v1/channels/chatwoot/whatsapp/templates?instance_id=unknown')
+        response = client.get('/v1/channels/chat/whatsapp/templates', headers={'x-instance-id': 'unknown'})
     assert response.status_code == HTTPStatus.NOT_FOUND
 
 
@@ -84,7 +87,7 @@ def test_list_templates_returns_non_empty_list(client):
         patch('app.routers.channels.fetch_chatwoot_config', return_value=_FAKE_CONFIG),
         patch('app.handlers.chatwoot.template_provider.requests.get', return_value=mock_resp),
     ):
-        response = client.get('/v1/channels/chatwoot/whatsapp/templates?instance_id=test-instance')
+        response = client.get('/v1/channels/chat/whatsapp/templates', headers={'x-instance-id': 'test-instance'})
 
     assert response.status_code == HTTPStatus.OK
     templates = response.json()
@@ -101,7 +104,7 @@ def test_list_templates_item_has_required_fields(client):
         patch('app.routers.channels.fetch_chatwoot_config', return_value=_FAKE_CONFIG),
         patch('app.handlers.chatwoot.template_provider.requests.get', return_value=mock_resp),
     ):
-        templates = client.get('/v1/channels/chatwoot/whatsapp/templates?instance_id=test-instance').json()
+        templates = client.get('/v1/channels/chat/whatsapp/templates', headers={'x-instance-id': 'test-instance'}).json()
 
     tmpl = templates[0]
     for field in ('id', 'name', 'status', 'category', 'language', 'components'):
@@ -124,7 +127,7 @@ def test_list_templates_collects_across_all_inboxes(client):
         patch('app.routers.channels.fetch_chatwoot_config', return_value=_FAKE_CONFIG),
         patch('app.handlers.chatwoot.template_provider.requests.get', return_value=mock_resp),
     ):
-        templates = client.get('/v1/channels/chatwoot/whatsapp/templates?instance_id=test-instance').json()
+        templates = client.get('/v1/channels/chat/whatsapp/templates', headers={'x-instance-id': 'test-instance'}).json()
 
     assert len(templates) == len(inboxes['payload'])
 
@@ -138,12 +141,31 @@ def test_list_templates_chatwoot_error_returns_502(client):
         patch('app.routers.channels.fetch_chatwoot_config', return_value=_FAKE_CONFIG),
         patch('app.handlers.chatwoot.template_provider.requests.get', return_value=mock_resp),
     ):
-        response = client.get('/v1/channels/chatwoot/whatsapp/templates?instance_id=test-instance')
+        response = client.get('/v1/channels/chat/whatsapp/templates', headers={'x-instance-id': 'test-instance'})
 
     assert response.status_code == HTTPStatus.BAD_GATEWAY
 
 
 def test_unknown_channel_templates_returns_404(client):
     with patch('app.routers.channels.fetch_chatwoot_config', return_value=None):
-        response = client.get('/v1/channels/chatwoot/telegram/templates?instance_id=any')
+        response = client.get('/v1/channels/chat/telegram/templates', headers={'x-instance-id': 'any'})
     assert response.status_code == HTTPStatus.NOT_FOUND
+
+
+# ---------------------------------------------------------------------------
+# Integration — requires TEST_CHATWOOT_INSTANCE_ID (hits real PocketBase)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.skipif(
+    not os.getenv('TEST_CHATWOOT_INSTANCE_ID'),
+    reason='requires TEST_CHATWOOT_INSTANCE_ID',
+)
+def test_list_templates_integration_returns_templates(client):
+    """Integration: GET /v1/channels/chat/whatsapp/templates hits real PocketBase and Chatwoot API."""
+    instance_id = os.environ['TEST_CHATWOOT_INSTANCE_ID']
+    response = client.get('/v1/channels/chat/whatsapp/templates', headers={'x-instance-id': instance_id})
+    assert response.status_code == HTTPStatus.OK
+    templates = response.json()
+    assert isinstance(templates, list)
+    assert len(templates) > 0
