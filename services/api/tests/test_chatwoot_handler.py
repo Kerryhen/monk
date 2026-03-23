@@ -1,9 +1,10 @@
 # tests/test_chatwoot_handler.py
 import json
+import os
+from http import HTTPStatus
 from unittest.mock import MagicMock, patch
 
 import pytest
-from pocketbase.errors import ClientResponseError
 
 from app.handlers.chatwoot.handler import CampaignCtx, ChatwootHandler
 from app.handlers.chatwoot.schemas import ChatwootTemplateConfig
@@ -33,10 +34,11 @@ TEMPLATE_BODY = json.dumps({
 
 CHATWOOT_CONFIG = {
     'url': 'https://chatwoot.example.com',
-    'api_token': 'test_token',
+    'api_token_handler': 'test_token',
+    'api_token_templates': 'user_token',
     'account_id': 5,
     'inbox_id': 10,
-    'phone_attrib': 'phone',
+    'phone_attr': 'phone',
 }
 
 # --------------------------------------------------------------------------- #
@@ -92,11 +94,7 @@ def ctx(template, payload):
 
 @pytest.fixture
 def mock_pb():
-    pb = MagicMock()
-    config_record = MagicMock()
-    config_record.config = CHATWOOT_CONFIG
-    pb.client.collection.return_value.get_first_list_item.return_value = config_record
-    return pb
+    return MagicMock()
 
 
 def _make_http_session(contact_id=42, conversation_id=99, contact_exists=False):
@@ -226,6 +224,7 @@ def test_process_all_sends_to_chatwoot(handler, payload, mock_pb):
 
     with (
         patch('app.handlers.chatwoot.handler.get_pocketbase_session', return_value=mock_pb),
+        patch('app.handlers.chatwoot.handler.fetch_chatwoot_config', return_value=CHATWOOT_CONFIG),
         patch('app.handlers.chatwoot.handler.requests.Session', return_value=session),
     ):
         handler._process_all(payload)
@@ -244,6 +243,7 @@ def test_process_all_invalid_body_skips_all(handler, mock_pb):
 
     with (
         patch('app.handlers.chatwoot.handler.get_pocketbase_session', return_value=mock_pb),
+        patch('app.handlers.chatwoot.handler.fetch_chatwoot_config', return_value=CHATWOOT_CONFIG),
         patch('app.handlers.chatwoot.handler.requests.Session') as mock_session_cls,
     ):
         handler._process_all(bad_payload)
@@ -262,6 +262,7 @@ def test_process_all_missing_instance_tag_skips_all(handler, mock_pb):
 
     with (
         patch('app.handlers.chatwoot.handler.get_pocketbase_session', return_value=mock_pb),
+        patch('app.handlers.chatwoot.handler.fetch_chatwoot_config', return_value=CHATWOOT_CONFIG),
         patch('app.handlers.chatwoot.handler.requests.Session') as mock_session_cls,
     ):
         handler._process_all(payload_no_tag)
@@ -270,11 +271,9 @@ def test_process_all_missing_instance_tag_skips_all(handler, mock_pb):
 
 
 def test_process_all_missing_config_skips_all(handler, payload):
-    pb = MagicMock()
-    pb.client.collection.return_value.get_first_list_item.side_effect = ClientResponseError()
-
     with (
-        patch('app.handlers.chatwoot.handler.get_pocketbase_session', return_value=pb),
+        patch('app.handlers.chatwoot.handler.get_pocketbase_session', return_value=MagicMock()),
+        patch('app.handlers.chatwoot.handler.fetch_chatwoot_config', return_value=None),
         patch('app.handlers.chatwoot.handler.requests.Session') as mock_session_cls,
     ):
         handler._process_all(payload)
@@ -298,6 +297,7 @@ def test_process_all_one_failure_does_not_abort_others(handler, mock_pb):
 
     with (
         patch('app.handlers.chatwoot.handler.get_pocketbase_session', return_value=mock_pb),
+        patch('app.handlers.chatwoot.handler.fetch_chatwoot_config', return_value=CHATWOOT_CONFIG),
         patch('app.handlers.chatwoot.handler.requests.Session', return_value=session),
     ):
         handler._process_all(multi_payload)
@@ -316,3 +316,69 @@ def test_send_starts_background_thread(handler, payload):
         handler.send(payload)
         mock_thread.assert_called_once()
         mock_thread.return_value.start.assert_called_once()
+
+
+# --------------------------------------------------------------------------- #
+# E2E — real PocketBase + real Chatwoot (requires env vars via Doppler)
+# --------------------------------------------------------------------------- #
+
+
+class _SyncThread:
+    """Replaces threading.Thread to run the target synchronously for test assertions."""
+
+    def __init__(self, target, args=(), daemon=False):
+        self._target = target
+        self._args = args
+
+    def start(self):
+        self._target(*self._args)
+
+
+_E2E_VARS = ['TEST_CHATWOOT_INSTANCE_ID', 'TEST_CHATWOOT_PHONE', 'TEST_CHATWOOT_TEMPLATE']
+
+
+@pytest.mark.skipif(
+    not all(os.getenv(v) for v in _E2E_VARS),
+    reason='requires TEST_CHATWOOT_INSTANCE_ID, TEST_CHATWOOT_PHONE, TEST_CHATWOOT_TEMPLATE',
+)
+def test_chatwoot_e2e_sends_via_messenger(client):
+    """E2E: POST /v1/messenger/chatwoot runs through real PocketBase and Chatwoot API."""
+    instance_id = os.environ['TEST_CHATWOOT_INSTANCE_ID']
+    phone = os.environ['TEST_CHATWOOT_PHONE']
+    template = os.environ['TEST_CHATWOOT_TEMPLATE']
+
+    body = json.dumps({
+        'template_name': template,
+        'language': 'pt_BR',
+        'category': 'UTILITY',
+        'params': {'body': {}, 'buttons': []},
+    })
+    payload = {
+        'subject': 'E2E Test',
+        'body': body,
+        'content_type': 'plain',
+        'campaign': {
+            'uuid': 'e2e-test-001',
+            'name': 'E2E Chatwoot Test',
+            'tags': [f'instance:{instance_id}'],
+        },
+        'recipients': [{
+            'uuid': 'e2e-recipient-001',
+            'email': 'test@example.com',
+            'name': 'Test Contact',
+            'attribs': {'phone': phone},
+            'status': 'enabled',
+        }],
+    }
+
+    captured = {}
+
+    with (
+        patch('app.handlers.chatwoot.handler.Thread', _SyncThread),
+        patch('app.handlers.chatwoot.handler.enrich_wide_event', side_effect=captured.update),
+    ):
+        response = client.post('/v1/messenger/chatwoot', json=payload)
+
+    assert response.status_code == HTTPStatus.OK
+    assert 'error' not in captured, f'Handler reported error: {captured}'
+    assert captured.get('recipients_sent') == 1
