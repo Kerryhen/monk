@@ -2,8 +2,6 @@
 from http import HTTPStatus
 from unittest.mock import MagicMock, patch
 
-from pocketbase.errors import ClientResponseError
-
 # ---------------------------------------------------------------------------
 # Schema endpoints (unchanged behaviour)
 # ---------------------------------------------------------------------------
@@ -49,10 +47,8 @@ def test_unknown_handler_schemas_returns_404(client):
 
 _FAKE_CONFIG = {
     'url': 'https://chatwoot.example.com',
-    'api_token': 'tok',
-    'account_id': 3,
-    'inbox_id': 8,
-    'phone_attrib': 'phone',
+    'api_token_templates': 'xpto',
+    'account_id': '3',
 }
 
 _FAKE_TEMPLATE = {
@@ -68,22 +64,13 @@ _FAKE_TEMPLATE = {
 _FAKE_INBOXES_RESPONSE = {'payload': [{'id': 8, 'message_templates': [_FAKE_TEMPLATE]}]}
 
 
-def _mock_pb_record():
-    record = MagicMock()
-    record.config = _FAKE_CONFIG
-    return record
-
-
 def test_list_templates_missing_instance_id_returns_422(client):
     response = client.get('/v1/channels/chatwoot/whatsapp/templates')
     assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
 
 
 def test_list_templates_unknown_instance_returns_404(client):
-    with patch('app.routers.channels.get_pocketbase_session') as mock_pb:
-        mock_pb.return_value.client.collection.return_value.get_first_list_item.side_effect = ClientResponseError(
-            MagicMock(), MagicMock()
-        )
+    with patch('app.routers.channels.fetch_chatwoot_config', return_value=None):
         response = client.get('/v1/channels/chatwoot/whatsapp/templates?instance_id=unknown')
     assert response.status_code == HTTPStatus.NOT_FOUND
 
@@ -94,10 +81,9 @@ def test_list_templates_returns_non_empty_list(client):
     mock_resp.json.return_value = _FAKE_INBOXES_RESPONSE
 
     with (
-        patch('app.routers.channels.get_pocketbase_session') as mock_pb,
+        patch('app.routers.channels.fetch_chatwoot_config', return_value=_FAKE_CONFIG),
         patch('app.handlers.chatwoot.template_provider.requests.get', return_value=mock_resp),
     ):
-        mock_pb.return_value.client.collection.return_value.get_first_list_item.return_value = _mock_pb_record()
         response = client.get('/v1/channels/chatwoot/whatsapp/templates?instance_id=test-instance')
 
     assert response.status_code == HTTPStatus.OK
@@ -112,10 +98,9 @@ def test_list_templates_item_has_required_fields(client):
     mock_resp.json.return_value = _FAKE_INBOXES_RESPONSE
 
     with (
-        patch('app.routers.channels.get_pocketbase_session') as mock_pb,
+        patch('app.routers.channels.fetch_chatwoot_config', return_value=_FAKE_CONFIG),
         patch('app.handlers.chatwoot.template_provider.requests.get', return_value=mock_resp),
     ):
-        mock_pb.return_value.client.collection.return_value.get_first_list_item.return_value = _mock_pb_record()
         templates = client.get('/v1/channels/chatwoot/whatsapp/templates?instance_id=test-instance').json()
 
     tmpl = templates[0]
@@ -136,10 +121,9 @@ def test_list_templates_collects_across_all_inboxes(client):
     mock_resp.json.return_value = inboxes
 
     with (
-        patch('app.routers.channels.get_pocketbase_session') as mock_pb,
+        patch('app.routers.channels.fetch_chatwoot_config', return_value=_FAKE_CONFIG),
         patch('app.handlers.chatwoot.template_provider.requests.get', return_value=mock_resp),
     ):
-        mock_pb.return_value.client.collection.return_value.get_first_list_item.return_value = _mock_pb_record()
         templates = client.get('/v1/channels/chatwoot/whatsapp/templates?instance_id=test-instance').json()
 
     assert len(templates) == len(inboxes['payload'])
@@ -151,19 +135,15 @@ def test_list_templates_chatwoot_error_returns_502(client):
     mock_resp.status_code = 401
 
     with (
-        patch('app.routers.channels.get_pocketbase_session') as mock_pb,
+        patch('app.routers.channels.fetch_chatwoot_config', return_value=_FAKE_CONFIG),
         patch('app.handlers.chatwoot.template_provider.requests.get', return_value=mock_resp),
     ):
-        mock_pb.return_value.client.collection.return_value.get_first_list_item.return_value = _mock_pb_record()
         response = client.get('/v1/channels/chatwoot/whatsapp/templates?instance_id=test-instance')
 
     assert response.status_code == HTTPStatus.BAD_GATEWAY
 
 
 def test_unknown_channel_templates_returns_404(client):
-    with patch('app.routers.channels.get_pocketbase_session') as mock_pb:
-        mock_pb.return_value.client.collection.return_value.get_first_list_item.side_effect = ClientResponseError(
-            MagicMock(), MagicMock()
-        )
+    with patch('app.routers.channels.fetch_chatwoot_config', return_value=None):
         response = client.get('/v1/channels/chatwoot/telegram/templates?instance_id=any')
     assert response.status_code == HTTPStatus.NOT_FOUND

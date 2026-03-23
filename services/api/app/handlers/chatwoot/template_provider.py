@@ -11,7 +11,7 @@ class ChatwootTemplateProvider(TemplateProviderBase):
     @override
     def get_templates(self, config: dict) -> list[dict]:
         base = f'{config["url"].rstrip("/")}/api/v1/accounts/{config["account_id"]}'
-        headers = {'api_access_token': config['api_token']}
+        headers = {'api_access_token': config['api_token_templates']}
         try:
             resp = requests.get(f'{base}/inboxes', headers=headers, timeout=10)
         except requests.RequestException as exc:

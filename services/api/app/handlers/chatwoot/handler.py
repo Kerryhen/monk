@@ -15,6 +15,49 @@ from app.sessions import get_pocketbase_session
 
 logger = logging.getLogger(__name__)
 
+# Keys within service_secrets.secret_config — update here if field names change
+# Note: Chatwoot restricts bot tokens from contact endpoints; user token required for handler
+_HANDLER_TOKEN_KEY = 'api_access_token_user'
+_TEMPLATES_TOKEN_KEY = 'api_access_token_user'
+
+
+def fetch_chatwoot_config(pb, instance_id: str) -> dict | None:
+    """Assemble Chatwoot connection config from multiple PocketBase collections.
+
+    Returns a dict with keys: url, account_id, inbox_id, phone_attr,
+    api_token_handler, api_token_templates. Returns None if any required
+    collection lookup fails.
+    """
+    try:
+        channel_record = pb.client.collection('monk_channel_configs').get_first_list_item(
+            f'instance_id="{instance_id}" && handler="chatwoot" && channel="whatsapp"'
+        )
+        extra = channel_record.extra_config
+
+        instance_svc = pb.client.collection('instance_services').get_first_list_item(
+            f'instance="{instance_id}" && service.key="chatwoot"'
+        )
+
+        secret_record = pb.client.collection('service_secrets').get_first_list_item(
+            f'instance_service="{instance_svc.id}" && key="chatwoot"'
+        )
+        secret = secret_record.secret_config
+
+        svc_config = pb.client.collection('common_service_config').get_first_list_item('service.key="chatwoot"')
+
+        instance_config = pb.client.collection('conectai_instance_config').get_first_list_item(f'instance="{instance_id}"')
+    except ClientResponseError:
+        return None
+
+    return {
+        'url': svc_config.service_url,
+        'account_id': instance_config.chatwoot_account_id,
+        'inbox_id': extra['inbox_id'],
+        'phone_attr': extra['phone_attr'],
+        'api_token_handler': secret[_HANDLER_TOKEN_KEY],
+        'api_token_templates': secret[_TEMPLATES_TOKEN_KEY],
+    }
+
 
 @dataclass
 class CampaignCtx:
@@ -47,19 +90,9 @@ class ChatwootHandler(MessengerHandlerBase):
         return None
 
     @staticmethod
-    def _fetch_channel_config(pb, instance_id: str) -> dict | None:
-        try:
-            record = pb.client.collection('monk_channel_configs').get_first_list_item(
-                f'instance_id="{instance_id}" && handler="chatwoot" && channel="whatsapp"'
-            )
-            return record.config
-        except ClientResponseError:
-            return None
-
-    @staticmethod
     def _fetch_instancia(pb, instance_id: str) -> dict:
         try:
-            record = pb.client.collection('instancias').get_first_list_item(f'instance_id="{instance_id}"')
+            record = pb.client.collection('instances').get_one(instance_id)
             return {k: v for k, v in record.__dict__.items() if not k.startswith('_')}
         except Exception:
             return {}
@@ -74,7 +107,7 @@ class ChatwootHandler(MessengerHandlerBase):
 
     def _find_or_create_contact(self, session: requests.Session, config: dict, phone: str, name: str) -> int | None:
         base = f'{config["url"].rstrip("/")}/api/v1/accounts/{config["account_id"]}'
-        headers = self._headers(config['api_token'])
+        headers = self._headers(config['api_token_handler'])
 
         resp = session.get(
             f'{base}/contacts/search',
@@ -100,7 +133,7 @@ class ChatwootHandler(MessengerHandlerBase):
         resp = session.post(
             f'{base}/conversations',
             json={'inbox_id': config['inbox_id'], 'contact_id': contact_id},
-            headers=self._headers(config['api_token']),
+            headers=self._headers(config['api_token_handler']),
             timeout=10,
         )
         return resp.json().get('id') if resp.ok else None
@@ -124,7 +157,7 @@ class ChatwootHandler(MessengerHandlerBase):
         resp = session.post(
             f'{base}/conversations/{conversation_id}/messages',
             json=message_body,
-            headers=self._headers(config['api_token']),
+            headers=self._headers(config['api_token_handler']),
             timeout=10,
         )
         return resp.ok
@@ -180,7 +213,7 @@ class ChatwootHandler(MessengerHandlerBase):
             return False
 
         resolved_body, resolved_buttons = resolved
-        phone = recipient.attribs.get(ctx.config['phone_attrib'])
+        phone = recipient.attribs.get(ctx.config['phone_attr'])
         if not phone:
             logger.warning('chatwoot.skip_recipient', extra={'reason': 'missing:phone', 'uuid': recipient.uuid})
             return False
@@ -235,7 +268,7 @@ class ChatwootHandler(MessengerHandlerBase):
             return
 
         pb = get_pocketbase_session()
-        config = self._fetch_channel_config(pb, instance_id)
+        config = fetch_chatwoot_config(pb, instance_id)
         if config is None:
             logger.error('chatwoot.missing_config', extra={'instance_id': instance_id})
             enrich_wide_event({
