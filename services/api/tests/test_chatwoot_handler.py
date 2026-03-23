@@ -362,13 +362,15 @@ def test_chatwoot_e2e_sends_via_messenger(client):
             'name': 'E2E Chatwoot Test',
             'tags': [f'instance:{instance_id}'],
         },
-        'recipients': [{
-            'uuid': 'e2e-recipient-001',
-            'email': 'test@example.com',
-            'name': 'Test Contact',
-            'attribs': {'phone': phone},
-            'status': 'enabled',
-        }],
+        'recipients': [
+            {
+                'uuid': 'e2e-recipient-001',
+                'email': 'test@example.com',
+                'name': 'Test Contact',
+                'attribs': {'phone': phone},
+                'status': 'enabled',
+            }
+        ],
     }
 
     captured = {}

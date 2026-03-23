@@ -66,7 +66,7 @@ def integration_payload(recipient):
         campaign=MessengerCampaignMeta(
             uuid='camp-integration-001',
             name='Cobrança Integration',
-            tags=['cobranca', 'instance:mxf'],
+            tags=['cobranca', 'instance:87v79w2os56q298'],
         ),
         recipients=[recipient],
     )
@@ -128,7 +128,7 @@ def test_instancia_fallback_default_used(handler, chatwoot_session):
         subject='Test fallback',
         body=TEMPLATE_BODY,
         content_type='plain',
-        campaign=MessengerCampaignMeta(uuid='c-fb', name='Fallback', tags=['instance:mxf']),
+        campaign=MessengerCampaignMeta(uuid='c-fb', name='Fallback', tags=['instance:87v79w2os56q298']),
         recipients=[
             MessengerRecipient(
                 uuid='r-fb', email='fb@x.com', name='Fallback User', attribs={'phone': '+5511000000000'}, status='enabled'
@@ -154,7 +154,7 @@ def test_recipient_missing_phone_skipped(handler, chatwoot_session):
         subject='No phone',
         body=TEMPLATE_BODY,
         content_type='plain',
-        campaign=MessengerCampaignMeta(uuid='c-np', name='No Phone', tags=['instance:mxf']),
+        campaign=MessengerCampaignMeta(uuid='c-np', name='No Phone', tags=['instance:87v79w2os56q298']),
         recipients=[MessengerRecipient(uuid='r-np', email='np@x.com', name='No Phone', attribs={}, status='enabled')],
     )
 
@@ -187,7 +187,7 @@ def test_invalid_body_skips_all(handler, chatwoot_session):
         subject='Bad body',
         body='not valid json {{ }}',
         content_type='plain',
-        campaign=MessengerCampaignMeta(uuid='c-bad', name='Bad', tags=['instance:mxf']),
+        campaign=MessengerCampaignMeta(uuid='c-bad', name='Bad', tags=['instance:87v79w2os56q298']),
         recipients=[MessengerRecipient(uuid='r-bad', email='b@x.com', name='B', attribs={'phone': '+55'}, status='enabled')],
     )
 
@@ -209,7 +209,7 @@ def test_endpoint_returns_200_immediately(client):
         'body': TEMPLATE_BODY,
         'content_type': 'plain',
         'recipients': [{'uuid': 'r-ep', 'email': 'ep@x.com', 'name': 'EP', 'attribs': {'phone': '+55'}, 'status': 'enabled'}],
-        'campaign': {'uuid': 'c-ep', 'name': 'EP Campaign', 'tags': ['instance:mxf']},
+        'campaign': {'uuid': 'c-ep', 'name': 'EP Campaign', 'tags': ['instance:87v79w2os56q298']},
         'attachments': [],
     }
 
