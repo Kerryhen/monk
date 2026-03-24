@@ -204,8 +204,11 @@ class Interface:
         instance_tag = f'instance:{payload.client.id}'
         campaign_data['tags'] = list(campaign_data.get('tags') or []) + [instance_tag]
 
-        # Listmonk expects body as a string; serialize structured WhatsApp body to JSON
+        # Listmonk expects body as a string; serialize structured WhatsApp body to JSON.
+        # Clear `content` first — it contains WhatsApp {{n}} placeholders that Listmonk
+        # would try to render as Go templates, causing a compile error.
         if isinstance(campaign_data.get('body'), dict):
+            campaign_data['body']['content'] = ''
             campaign_data['body'] = json.dumps(campaign_data['body'])
 
         # Listmonk template_id expects int (email template); strip string WhatsApp template IDs
