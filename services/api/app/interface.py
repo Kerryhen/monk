@@ -1,6 +1,8 @@
 import csv
 import io
 import json
+import logging
+from functools import lru_cache
 from http import HTTPStatus
 from typing import Annotated, Optional
 
@@ -39,7 +41,34 @@ MonkLists = Monk(auth_creds=auth_monk, url=url_monk)
 MonkCampaigns = Monk(auth_creds=auth_monk, url=url_monk_campaigns)
 MonkSubscribers = Monk(auth_creds=auth_monk, url=url_monk_subscribers)
 MonkSubscribersSingle = Monk(auth_creds=auth_monk, url=url_monk_subscribers_single)
+MonkTemplates = Monk(auth_creds=auth_monk, url=f'{settings.LISTMONK_API_URL}/templates')
 Pocket = Annotated[PocketBaseSession, Depends(get_pocketbase_session)]
+
+logger = logging.getLogger(__name__)
+
+_PASSTHROUGH_TEMPLATE_NAME = 'Passthrough (messenger)'
+_PASSTHROUGH_TEMPLATE_BODY = '{{ template "content" . }}'
+
+
+@lru_cache(maxsize=1)
+def _get_messenger_template_id() -> int:
+    """Return the Listmonk template ID for the passthrough messenger template.
+
+    Looks up the template by name on first call and caches the result for the
+    lifetime of the process. Auto-creates the template if it doesn't exist yet.
+    """
+    resp = MonkTemplates.get({})
+    if resp.ok:
+        for t in resp.json().get('data', []):
+            if t.get('name') == _PASSTHROUGH_TEMPLATE_NAME:
+                return t['id']
+
+    resp = MonkTemplates.post({'name': _PASSTHROUGH_TEMPLATE_NAME, 'type': 'campaign', 'body': _PASSTHROUGH_TEMPLATE_BODY})
+    if resp.ok:
+        return resp.json()['data']['id']
+
+    logger.warning('listmonk.passthrough_template_unavailable')
+    return 0
 
 
 class Interface:
@@ -216,8 +245,10 @@ class Interface:
         # body in its email HTML template before handing it to the messenger.
         if isinstance(campaign_data.get('template_id'), str):
             campaign_data.pop('template_id')
-        if campaign_data.get('messenger') not in {None, 'email'} and settings.LISTMONK_MESSENGER_TEMPLATE_ID:
-            campaign_data['template_id'] = settings.LISTMONK_MESSENGER_TEMPLATE_ID
+        if campaign_data.get('messenger') not in {None, 'email'}:
+            tid = _get_messenger_template_id()
+            if tid:
+                campaign_data['template_id'] = tid
 
         try:
             response = self.__monk_campaigns.post(campaign_data)

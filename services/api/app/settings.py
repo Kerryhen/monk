@@ -10,6 +10,3 @@ class Settings(BaseSettings):
     POCKETBASE_BOT_PASSWORD: str
     POCKETBASE_API_URL: str
     ENVIRONMENT: str = 'PRD'
-    # Listmonk template ID for non-email messenger campaigns (must output content as-is, no HTML wrapping).
-    # Create a template with body `{{ template "content" . }}` and set its ID here.
-    LISTMONK_MESSENGER_TEMPLATE_ID: int = 0
