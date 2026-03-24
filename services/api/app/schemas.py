@@ -1,7 +1,44 @@
 from datetime import datetime
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
+
+# ---------------------------------------------------------------------------
+# Chatwoot campaign body schemas
+# Defined here (not in handlers/) to avoid a circular import:
+#   app/schemas.py → app/handlers/chatwoot/schemas.py
+#   → app/handlers/chatwoot/__init__.py → ChatwootHandler
+#   → app/handlers/base.py → app/schemas.py
+# ---------------------------------------------------------------------------
+
+
+class ChatwootButtonParam(BaseModel):
+    type: str
+    parameter: str  # resolver ref
+    url: str
+    variables: list[str]
+
+
+class ChatwootTemplateParams(BaseModel):
+    body: dict[str, str]  # slot_id -> resolver ref
+    buttons: list[ChatwootButtonParam] = []
+
+
+class ChatwootTemplateConfig(BaseModel):
+    name: str
+    language: str
+    category: str
+    processed_params: ChatwootTemplateParams
+
+
+class ChatwootCampaignBody(BaseModel):
+    content: str
+    message_type: str
+    private: bool
+    content_type: str
+    template_params: ChatwootTemplateConfig
+    template_id: Optional[str] = None
+
 
 # =============================================================================
 # LISTMONK (LM) SCHEMAS
@@ -108,12 +145,12 @@ class LM_CreateCampaignSchema(BaseModel):
     from_email: Optional[str] = Field(None, description="'From' email in campaign emails")
     type: Literal['regular', 'optin'] = Field('regular', description='Campaign type')
     content_type: Literal['richtext', 'html', 'markdown', 'plain'] = Field(..., description='Content type')
-    body: str = Field(..., description='Content body of campaign')
+    body: Union[str, ChatwootCampaignBody] = Field(..., description='Content body of campaign')
     altbody: Optional[str] = Field(None, description='Alternate plain text body for HTML or richtext emails')
     send_at: Optional[datetime] = Field(None, description='Schedule timestamp (ISO 8601)')
     send_later: Optional[bool] = Field(None, description='Schedule for later')
     messenger: Optional[str] = Field('email', description="Messenger type, defaults to 'email'")
-    template_id: Optional[int] = Field(None, description='Template ID to use')
+    template_id: Optional[str] = Field(None, description='WhatsApp template ID (string); not forwarded to Listmonk')
     tags: Optional[List[str]] = Field(None, description='Tags to mark campaign')
     headers: Optional[List[Dict[str, str]]] = Field(None, description='SMTP headers as key-value pairs')
 
