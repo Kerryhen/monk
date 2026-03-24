@@ -117,6 +117,8 @@ class ChatwootHandler(MessengerHandlerBase):
             results = resp.json().get('payload', [])
             if results:
                 return results[0]['id']
+        else:
+            logger.warning('chatwoot.contact_search_failed', extra={'status': resp.status_code, 'body': resp.text[:500]})
 
         resp = session.post(
             f'{base}/contacts',
@@ -124,7 +126,10 @@ class ChatwootHandler(MessengerHandlerBase):
             headers=headers,
             timeout=10,
         )
-        return resp.json().get('id') if resp.ok else None
+        if not resp.ok:
+            logger.error('chatwoot.create_contact_failed', extra={'status': resp.status_code, 'body': resp.text[:500]})
+            return None
+        return resp.json().get('id')
 
     def _create_conversation(self, session: requests.Session, config: dict, contact_id: int) -> int | None:
         base = f'{config["url"].rstrip("/")}/api/v1/accounts/{config["account_id"]}'
@@ -134,7 +139,10 @@ class ChatwootHandler(MessengerHandlerBase):
             headers=self._headers(config['api_token_handler']),
             timeout=10,
         )
-        return resp.json().get('id') if resp.ok else None
+        if not resp.ok:
+            logger.error('chatwoot.create_conversation_failed', extra={'status': resp.status_code, 'body': resp.text[:500]})
+            return None
+        return resp.json().get('id')
 
     @staticmethod
     def _build_message_body(template, resolved_body: dict, resolved_buttons: list) -> dict:
@@ -158,6 +166,8 @@ class ChatwootHandler(MessengerHandlerBase):
             headers=self._headers(config['api_token_handler']),
             timeout=10,
         )
+        if not resp.ok:
+            logger.error('chatwoot.send_message_failed', extra={'status': resp.status_code, 'body': resp.text[:500]})
         return resp.ok
 
     # ------------------------------------------------------------------ #
@@ -186,12 +196,13 @@ class ChatwootHandler(MessengerHandlerBase):
     def _resolve_params(self, recipient: MessengerRecipient, ctx: CampaignCtx) -> tuple[dict, list] | None:
         """Resolve all template variable refs. Returns None if any required field is absent."""
         context = self._build_context(recipient, ctx)
+        log_ctx = {'uuid': recipient.uuid, 'campaign': ctx.payload.campaign.name}
 
         resolved_body: dict[str, str] = {}
         for slot, ref in ctx.template.processed_params.body.items():
             ok, value = self._resolver.resolve(ref, context)
             if not ok:
-                logger.warning('chatwoot.skip_recipient', extra={'reason': f'missing:{ref}', 'uuid': recipient.uuid})
+                logger.warning('chatwoot.skip_recipient', extra={**log_ctx, 'reason': f'missing:{ref}'})
                 return None
             resolved_body[slot] = value
 
@@ -199,7 +210,7 @@ class ChatwootHandler(MessengerHandlerBase):
         for btn in ctx.template.processed_params.buttons:
             ok, value = self._resolver.resolve(btn.parameter, context)
             if not ok:
-                logger.warning('chatwoot.skip_recipient', extra={'reason': f'missing:{btn.parameter}', 'uuid': recipient.uuid})
+                logger.warning('chatwoot.skip_recipient', extra={**log_ctx, 'reason': f'missing:{btn.parameter}'})
                 return None
             resolved_buttons.append({'type': btn.type, 'parameter': value, 'url': btn.url, 'variables': btn.variables})
 
@@ -211,24 +222,23 @@ class ChatwootHandler(MessengerHandlerBase):
             return False
 
         resolved_body, resolved_buttons = resolved
+        log_ctx = {'uuid': recipient.uuid, 'campaign': ctx.payload.campaign.name}
+
         phone = recipient.attribs.get(ctx.config['phone_attr'])
         if not phone:
-            logger.warning('chatwoot.skip_recipient', extra={'reason': 'missing:phone', 'uuid': recipient.uuid})
+            logger.warning('chatwoot.skip_recipient', extra={**log_ctx, 'reason': 'missing:phone'})
             return False
 
         contact_id = self._find_or_create_contact(session, ctx.config, str(phone), recipient.name)
         if contact_id is None:
-            logger.error('chatwoot.contact_error', extra={'uuid': recipient.uuid})
             return False
 
         conversation_id = self._create_conversation(session, ctx.config, contact_id)
         if conversation_id is None:
-            logger.error('chatwoot.conversation_error', extra={'uuid': recipient.uuid})
             return False
 
         message_body = self._build_message_body(ctx.template, resolved_body, resolved_buttons)
         if not self._send_template_message(session, ctx.config, conversation_id, message_body):
-            logger.error('chatwoot.send_error', extra={'uuid': recipient.uuid})
             return False
 
         return True
