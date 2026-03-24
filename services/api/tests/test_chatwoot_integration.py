@@ -26,16 +26,22 @@ CHATWOOT_CALLS_NEW_CONTACT = 3
 # an `instancias` PocketBase record (handler returns {} on error).
 # --------------------------------------------------------------------------- #
 TEMPLATE_BODY = json.dumps({
-    'template_name': 'cobranca_v2',
-    'language': 'pt_BR',
-    'category': 'UTILITY',
-    'params': {
-        'body': {
-            '1': 'lead.name:amigo',
-            '2': 'campanha.subject:assunto',
-            '3': 'instancia.razao_social:Empresa',
+    'content': 'Oi, {{1}}! Fatura de {{2}} da {{3}}.',
+    'message_type': 'outgoing',
+    'private': False,
+    'content_type': 'text',
+    'template_params': {
+        'name': 'cobranca_v2',
+        'language': 'pt_BR',
+        'category': 'UTILITY',
+        'processed_params': {
+            'body': {
+                '1': 'lead.name:amigo',
+                '2': 'campanha.subject:assunto',
+                '3': 'instancia.razao_social:Empresa',
+            },
+            'buttons': [],
         },
-        'buttons': [],
     },
 })
 

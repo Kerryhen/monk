@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from app.handlers.chatwoot.handler import CampaignCtx, ChatwootHandler
-from app.handlers.chatwoot.schemas import ChatwootTemplateConfig
+from app.handlers.chatwoot.schemas import ChatwootCampaignBody, ChatwootTemplateConfig
 from app.handlers.resolver import DefaultVariableResolver
 from app.schemas import MessengerCampaignMeta, MessengerPayload, MessengerRecipient
 
@@ -20,15 +20,21 @@ CHATWOOT_CALLS_EXIST_CONTACT = 2  # conversation + message (contact found in sea
 # --------------------------------------------------------------------------- #
 
 TEMPLATE_BODY = json.dumps({
-    'template_name': 'cobranca_v2',
-    'language': 'pt_BR',
-    'category': 'UTILITY',
-    'params': {
-        'body': {
-            '1': 'lead.name:amigo',
-            '2': 'instancia.razao_social:Empresa',
+    'content': 'Oi, {{1}}! Sua fatura de {{2}} venceu.',
+    'message_type': 'outgoing',
+    'private': False,
+    'content_type': 'text',
+    'template_params': {
+        'name': 'cobranca_v2',
+        'language': 'pt_BR',
+        'category': 'UTILITY',
+        'processed_params': {
+            'body': {
+                '1': 'lead.name:amigo',
+                '2': 'instancia.razao_social:Empresa',
+            },
+            'buttons': [],
         },
-        'buttons': [],
     },
 })
 
@@ -53,7 +59,7 @@ def handler():
 
 @pytest.fixture
 def template():
-    return ChatwootTemplateConfig.model_validate_json(TEMPLATE_BODY)
+    return ChatwootCampaignBody.model_validate_json(TEMPLATE_BODY).template_params
 
 
 @pytest.fixture
@@ -163,10 +169,10 @@ def test_process_one_uses_existing_contact(handler, recipient, ctx):
 
 def test_process_one_skips_when_required_field_missing(handler, payload):
     body = json.dumps({
-        'template_name': 't',
+        'name': 't',
         'language': 'pt_BR',
         'category': 'UTILITY',
-        'params': {'body': {'1': 'lead.attribs.cpf'}, 'buttons': []},  # required, no default
+        'processed_params': {'body': {'1': 'lead.attribs.cpf'}, 'buttons': []},  # required, no default
     })
     local_template = ChatwootTemplateConfig.model_validate_json(body)
     recipient = MessengerRecipient(uuid='r-002', email='a@b.com', name='X', attribs={'phone': '+55'}, status='enabled')
@@ -348,10 +354,16 @@ def test_chatwoot_e2e_sends_via_messenger(client):
     template = os.environ['TEST_CHATWOOT_TEMPLATE']
 
     body = json.dumps({
-        'template_name': template,
-        'language': 'pt_BR',
-        'category': 'UTILITY',
-        'params': {'body': {}, 'buttons': []},
+        'content': '',
+        'message_type': 'outgoing',
+        'private': False,
+        'content_type': 'text',
+        'template_params': {
+            'name': template,
+            'language': 'pt_BR',
+            'category': 'UTILITY',
+            'processed_params': {'body': {}, 'buttons': []},
+        },
     })
     payload = {
         'subject': 'E2E Test',

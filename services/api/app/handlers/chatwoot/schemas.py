@@ -1,20 +1,3 @@
-from pydantic import BaseModel
+from app.schemas import ChatwootButtonParam, ChatwootCampaignBody, ChatwootTemplateConfig, ChatwootTemplateParams
 
-
-class ChatwootButtonParam(BaseModel):
-    type: str
-    parameter: str  # resolver ref
-    url: str
-    variables: list[str]
-
-
-class ChatwootTemplateParams(BaseModel):
-    body: dict[str, str]  # slot_id -> resolver ref
-    buttons: list[ChatwootButtonParam] = []
-
-
-class ChatwootTemplateConfig(BaseModel):
-    template_name: str
-    language: str
-    category: str
-    params: ChatwootTemplateParams
+__all__ = ['ChatwootButtonParam', 'ChatwootCampaignBody', 'ChatwootTemplateConfig', 'ChatwootTemplateParams']

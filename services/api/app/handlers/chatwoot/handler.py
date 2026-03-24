@@ -9,7 +9,7 @@ from pocketbase.errors import ClientResponseError
 
 from app.context import enrich_wide_event
 from app.handlers.base import MessengerHandlerBase, VariableResolverBase
-from app.handlers.chatwoot.schemas import ChatwootTemplateConfig
+from app.handlers.chatwoot.schemas import ChatwootCampaignBody, ChatwootTemplateConfig
 from app.schemas import MessengerPayload, MessengerRecipient
 from app.sessions import get_pocketbase_session
 
@@ -38,9 +38,7 @@ def fetch_chatwoot_config(pb, instance_id: str, handler: str, channel: str) -> d
             f'instance="{instance_id}" && service.key="{handler}"'
         )
 
-        secret_record = pb.client.collection('service_secrets').get_first_list_item(
-            f'instance_service="{instance_svc.id}"'
-        )
+        secret_record = pb.client.collection('service_secrets').get_first_list_item(f'instance_service="{instance_svc.id}"')
         secret = secret_record.secret_config
 
         svc_config = pb.client.collection('common_service_config').get_first_list_item(f'service.key="{handler}"')
@@ -139,13 +137,13 @@ class ChatwootHandler(MessengerHandlerBase):
         return resp.json().get('id') if resp.ok else None
 
     @staticmethod
-    def _build_message_body(template: ChatwootTemplateConfig, resolved_body: dict, resolved_buttons: list) -> dict:
+    def _build_message_body(template, resolved_body: dict, resolved_buttons: list) -> dict:
         processed_params: dict = dict(resolved_body)
         if resolved_buttons:
             processed_params['buttons'] = resolved_buttons
         return {
             'template_params': {
-                'name': template.template_name,
+                'name': template.name,
                 'category': template.category,
                 'language': template.language,
                 'processed_params': processed_params,
@@ -190,7 +188,7 @@ class ChatwootHandler(MessengerHandlerBase):
         context = self._build_context(recipient, ctx)
 
         resolved_body: dict[str, str] = {}
-        for slot, ref in ctx.template.params.body.items():
+        for slot, ref in ctx.template.processed_params.body.items():
             ok, value = self._resolver.resolve(ref, context)
             if not ok:
                 logger.warning('chatwoot.skip_recipient', extra={'reason': f'missing:{ref}', 'uuid': recipient.uuid})
@@ -198,7 +196,7 @@ class ChatwootHandler(MessengerHandlerBase):
             resolved_body[slot] = value
 
         resolved_buttons: list[dict] = []
-        for btn in ctx.template.params.buttons:
+        for btn in ctx.template.processed_params.buttons:
             ok, value = self._resolver.resolve(btn.parameter, context)
             if not ok:
                 logger.warning('chatwoot.skip_recipient', extra={'reason': f'missing:{btn.parameter}', 'uuid': recipient.uuid})
@@ -242,7 +240,8 @@ class ChatwootHandler(MessengerHandlerBase):
     def _process_all(self, payload: MessengerPayload) -> None:
         # Parse template config from body (PROB-05)
         try:
-            template = ChatwootTemplateConfig.model_validate_json(payload.body)
+            campaign_body = ChatwootCampaignBody.model_validate_json(payload.body)
+            template = campaign_body.template_params
         except Exception as exc:
             logger.error('chatwoot.invalid_body', extra={'error': str(exc)})
             enrich_wide_event({

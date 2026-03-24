@@ -203,6 +203,14 @@ class Interface:
         instance_tag = f'instance:{payload.client.id}'
         campaign_data['tags'] = list(campaign_data.get('tags') or []) + [instance_tag]
 
+        # Listmonk expects body as a string; serialize structured WhatsApp body to JSON
+        if isinstance(campaign_data.get('body'), dict):
+            campaign_data['body'] = json.dumps(campaign_data['body'])
+
+        # Listmonk template_id expects int (email template); strip string WhatsApp template IDs
+        if isinstance(campaign_data.get('template_id'), str):
+            campaign_data.pop('template_id')
+
         try:
             response = self.__monk_campaigns.post(campaign_data)
         except requests.RequestException as e:
