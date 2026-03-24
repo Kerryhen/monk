@@ -57,3 +57,4 @@ v1.include_router(messenger.router)
 v1.include_router(channels.router)
 
 app.include_router(v1)
+app.include_router(v1, prefix='/api')
