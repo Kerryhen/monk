@@ -126,16 +126,50 @@ class LM_CreateCampaignSchema(BaseModel):
 
     model_config = ConfigDict(
         json_schema_extra={
-            'example': {
-                'name': 'Welcome Campaign',
-                'subject': 'Welcome to our newsletter!',
-                'lists': [1],
-                'from_email': 'sender@example.com',
-                'type': 'regular',
-                'content_type': 'richtext',
-                'body': '<p>Hello, welcome!</p>',
-                'messenger': 'email',
-            }
+            'examples': [
+                {
+                    'summary': 'Email campaign',
+                    'value': {
+                        'name': 'Welcome Campaign',
+                        'subject': 'Welcome to our newsletter!',
+                        'lists': [1],
+                        'from_email': 'sender@example.com',
+                        'type': 'regular',
+                        'content_type': 'richtext',
+                        'body': '<p>Hello, welcome!</p>',
+                        'messenger': 'email',
+                    },
+                },
+                {
+                    'summary': 'WhatsApp template campaign',
+                    'value': {
+                        'name': 'Follow-up Campaign',
+                        'subject': 'Follow-up',
+                        'lists': [1],
+                        'type': 'regular',
+                        'content_type': 'plain',
+                        'messenger': 'whatsapp',
+                        'template_id': '891688563679173',
+                        'body': {
+                            'content': 'Oi, {{1}}! Tudo certo com o uso do {{2}}?',
+                            'message_type': 'outgoing',
+                            'private': False,
+                            'content_type': 'text',
+                            'template_params': {
+                                'name': 'follow_2',
+                                'category': 'MARKETING',
+                                'language': 'pt_BR',
+                                'processed_params': {
+                                    'body': {
+                                        '1': 'lead.name:amigo',
+                                        '2': 'instancia.razao_social:nossa empresa',
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            ]
         }
     )
 
