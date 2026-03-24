@@ -63,6 +63,7 @@ class Interface:
             detail = response.json().get('message', response.text)
         except Exception:
             detail = response.text
+        enrich_wide_event({'listmonk_error': {'status': response.status_code, 'detail': detail}})
         raise HTTPException(status_code=response.status_code, detail=detail)
 
     def _get_client_list_ids(self, client_id: str) -> list[str]:
