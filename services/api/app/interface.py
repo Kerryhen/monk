@@ -211,9 +211,13 @@ class Interface:
             campaign_data['body']['content'] = ''
             campaign_data['body'] = json.dumps(campaign_data['body'])
 
-        # Listmonk template_id expects int (email template); strip string WhatsApp template IDs
+        # Listmonk template_id expects int (email template); strip string WhatsApp template IDs.
+        # For non-email messengers, force a passthrough template so Listmonk doesn't wrap the
+        # body in its email HTML template before handing it to the messenger.
         if isinstance(campaign_data.get('template_id'), str):
             campaign_data.pop('template_id')
+        if campaign_data.get('messenger') not in {None, 'email'} and settings.LISTMONK_MESSENGER_TEMPLATE_ID:
+            campaign_data['template_id'] = settings.LISTMONK_MESSENGER_TEMPLATE_ID
 
         try:
             response = self.__monk_campaigns.post(campaign_data)
