@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/Kerryhen/monk/compare/monk-api-v0.4.0...monk-api-v0.4.1) (2026-03-26)
+
+
+### Bug Fixes
+
+* **api:** clarify version import comment ([#29](https://github.com/Kerryhen/monk/issues/29)) ([32c9b33](https://github.com/Kerryhen/monk/commit/32c9b33f3c0e5191c9a040003db9629eb01d72b5))
+
 ## [0.4.0](https://github.com/Kerryhen/monk/compare/monk-api-v0.3.0...monk-api-v0.4.0) (2026-03-26)
 
 
