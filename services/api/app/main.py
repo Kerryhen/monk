@@ -1,5 +1,5 @@
 import traceback
-from importlib.metadata import version
+from importlib.metadata import version  # stdlib — reads version from pyproject.toml at runtime
 
 from fastapi import APIRouter, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
