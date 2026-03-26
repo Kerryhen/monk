@@ -1,6 +1,6 @@
 [project]
 name = "listmonk"
-version = "0.4.2"
+version = "0.4.3"
 description = "Default template for PDM package"
 authors = [
     {name = "", email = ""},
