@@ -4,6 +4,10 @@ on:
   push:
     branches: [development]
 
+concurrency:
+  group: stg-integration-tests
+  cancel-in-progress: true
+
 jobs:
   lint:
     runs-on: ubuntu-latest
