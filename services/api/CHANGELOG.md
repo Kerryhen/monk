@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.2](https://github.com/Kerryhen/monk/compare/monk-api-v0.4.1...monk-api-v0.4.2) (2026-03-26)
+
+
+### Bug Fixes
+
+* **api:** recover from stale PocketBase relation IDs in create/delete list ([#32](https://github.com/Kerryhen/monk/issues/32)) ([318720e](https://github.com/Kerryhen/monk/commit/318720ecaba911ebe144bc8bea84c625f85bc75f))
+
 ## [0.4.1](https://github.com/Kerryhen/monk/compare/monk-api-v0.4.0...monk-api-v0.4.1) (2026-03-26)
 
 
