@@ -10,6 +10,7 @@ from pocketbase import PocketBase
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from app.context import enrich_wide_event
 from app.settings import Settings
 
 logger = logging.getLogger(__name__)
@@ -33,7 +34,7 @@ def get_monk_session(
         secrets.compare_digest(credentials.username, settings.LISTMONK_USER)
         and secrets.compare_digest(credentials.password, settings.LISTMONK_TOKEN)
     ):
-        logger.warning('auth.invalid_credentials', extra={'username': credentials.username})
+        enrich_wide_event({'auth': {'outcome': 'invalid_credentials', 'username': credentials.username}})
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail='Invalid authentication credentials',
@@ -63,7 +64,7 @@ class PocketBaseSession:
             raise HTTPException(status_code=503, detail=f'PocketBase auth failed: {e}')
 
         if not self.auth_data.is_valid:
-            logger.error('pocketbase.token_invalid')
+            logger.error('pocketbase.token_invalid', extra={'admin': admin})
             raise HTTPException(status_code=401, detail='PocketBase token invalid')
 
 

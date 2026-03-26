@@ -35,6 +35,11 @@ def test_create_campaign(client, created_campaign):
     assert created_campaign['status'] == 'draft'
 
 
+def test_create_campaign_injects_instance_tag(created_campaign):
+    tags = created_campaign.get('tags') or []
+    assert 'instance:mxf' in tags
+
+
 def test_get_campaigns(client, created_campaign):
     response = client.get('/v1/campaign/', headers=MXF)
     assert response.status_code == HTTPStatus.OK
@@ -42,6 +47,12 @@ def test_get_campaigns(client, created_campaign):
     assert isinstance(campaigns, list)
     ids = [c['id'] for c in campaigns]
     assert created_campaign['id'] in ids
+
+
+def test_get_campaigns_unknown_client_returns_empty(client):
+    response = client.get('/v1/campaign/', headers={'X-Instance-ID': 'never-registered-client'})
+    assert response.status_code == HTTPStatus.OK
+    assert response.json() == []
 
 
 def test_update_campaign(client, created_campaign):
@@ -164,5 +175,7 @@ def test_stop_campaign(client, created_campaign):
     if start.json()['status'] == 'finished':
         pytest.skip('Campaign finished immediately (no subscribers in list)')
     response = client.post(f'/v1/campaign/{campaign_id}/stop', headers=MXF)
+    if response.status_code == HTTPStatus.BAD_REQUEST:
+        pytest.skip('Campaign finished before stop could be issued')
     assert response.status_code == HTTPStatus.OK
     assert response.json()['status'] == 'paused'

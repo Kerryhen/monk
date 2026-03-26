@@ -30,19 +30,19 @@ Api = Annotated[Interface, Depends(get_interface_api)]
 InstanceID = Annotated[str, Header()]
 
 
-@router.get('/', response_model=list[ListSchema])
+@router.get('', response_model=list[ListSchema])
 def get_lists(api: Api, x_instance_id: InstanceID):
     """Return all lists owned by the client."""
     return api.get_lists(ClientSchema(id=x_instance_id))
 
 
-@router.post('/', status_code=HTTPStatus.CREATED, response_model=ListSchema)
+@router.post('', status_code=HTTPStatus.CREATED, response_model=ListSchema)
 def create_list(payload: LM_CreateListSchema, api: Api, x_instance_id: InstanceID):
     """Create a new list in Listmonk and record ownership in PocketBase."""
     return api.create_list(CreateListSchema(client=ClientSchema(id=x_instance_id), list=payload))
 
 
-@router.delete('/', status_code=HTTPStatus.OK, response_model=DeleteResponseSchema)
+@router.delete('', status_code=HTTPStatus.OK, response_model=DeleteResponseSchema)
 def delete_list(
     api: Api,
     x_instance_id: InstanceID,

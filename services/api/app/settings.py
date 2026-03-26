@@ -9,3 +9,4 @@ class Settings(BaseSettings):
     POCKETBASE_BOT_EMAIL: str
     POCKETBASE_BOT_PASSWORD: str
     POCKETBASE_API_URL: str
+    ENVIRONMENT: str = 'PRD'

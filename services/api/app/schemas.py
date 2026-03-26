@@ -1,7 +1,44 @@
 from datetime import datetime
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, Union
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
+
+# ---------------------------------------------------------------------------
+# Chatwoot campaign body schemas
+# Defined here (not in handlers/) to avoid a circular import:
+#   app/schemas.py → app/handlers/chatwoot/schemas.py
+#   → app/handlers/chatwoot/__init__.py → ChatwootHandler
+#   → app/handlers/base.py → app/schemas.py
+# ---------------------------------------------------------------------------
+
+
+class ChatwootButtonParam(BaseModel):
+    type: str
+    parameter: str  # resolver ref
+    url: str
+    variables: list[str]
+
+
+class ChatwootTemplateParams(BaseModel):
+    body: dict[str, str]  # slot_id -> resolver ref
+    buttons: list[ChatwootButtonParam] = []
+
+
+class ChatwootTemplateConfig(BaseModel):
+    name: str
+    language: str
+    category: str
+    processed_params: ChatwootTemplateParams
+
+
+class ChatwootCampaignBody(BaseModel):
+    content: str
+    message_type: str
+    private: bool
+    content_type: str
+    template_params: ChatwootTemplateConfig
+    template_id: Optional[str] = None
+
 
 # =============================================================================
 # LISTMONK (LM) SCHEMAS
@@ -17,8 +54,8 @@ class LM_ListSchema(BaseModel):
     updated_at: datetime
     uuid: str
     name: str
-    type: str
-    optin: str
+    type: Literal['private', 'public']
+    optin: Literal['single', 'double']
     tags: List[str]
     description: Optional[str] = None
     status: Optional[str] = None  # present in practice; omitted from the OpenAPI spec
@@ -28,8 +65,20 @@ class LM_ListSchema(BaseModel):
 class LM_CreateListSchema(BaseModel):
     """Listmonk POST /lists request body (NewList spec)."""
 
+    model_config = ConfigDict(
+        json_schema_extra={
+            'example': {
+                'name': 'My Subscribers',
+                'type': 'private',
+                'optin': 'single',
+                'description': 'Main subscriber list',
+                'tags': ['newsletter'],
+            }
+        }
+    )
+
     name: str
-    type: Literal['private', 'public']
+    type: Literal['private', 'public'] = 'private'
     optin: Literal['single', 'double']
     tags: Optional[List[str]] = None
     description: Optional[str] = None
@@ -75,18 +124,67 @@ class LM_ResponseListsSchema(BaseModel):
 class LM_CreateCampaignSchema(BaseModel):
     """Listmonk POST /campaigns request body (CampaignRequest spec)."""
 
+    model_config = ConfigDict(
+        json_schema_extra={
+            'examples': [
+                {
+                    'summary': 'Email campaign',
+                    'value': {
+                        'name': 'Welcome Campaign',
+                        'subject': 'Welcome to our newsletter!',
+                        'lists': [1],
+                        'from_email': 'sender@example.com',
+                        'type': 'regular',
+                        'content_type': 'richtext',
+                        'body': '<p>Hello, welcome!</p>',
+                        'messenger': 'email',
+                    },
+                },
+                {
+                    'summary': 'WhatsApp template campaign',
+                    'value': {
+                        'name': 'Follow-up Campaign',
+                        'subject': 'Follow-up',
+                        'lists': [1],
+                        'type': 'regular',
+                        'content_type': 'plain',
+                        'messenger': 'whatsapp',
+                        'template_id': '891688563679173',
+                        'body': {
+                            'content': 'Oi, {{1}}! Tudo certo com o uso do {{2}}?',
+                            'message_type': 'outgoing',
+                            'private': False,
+                            'content_type': 'text',
+                            'template_params': {
+                                'name': 'follow_2',
+                                'category': 'MARKETING',
+                                'language': 'pt_BR',
+                                'processed_params': {
+                                    'body': {
+                                        '1': 'lead.name:amigo',
+                                        '2': 'instancia.razao_social:nossa empresa',
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            ]
+        }
+    )
+
     name: str = Field(..., description='Campaign name')
     subject: str = Field(..., description='Campaign email subject')
-    lists: List[int] = Field(..., description='List IDs to send campaign to')
+    lists: List[int] = Field(..., min_length=1, description='List IDs to send campaign to')
     from_email: Optional[str] = Field(None, description="'From' email in campaign emails")
-    type: Literal['regular', 'optin'] = Field(..., description='Campaign type')
+    type: Literal['regular', 'optin'] = Field('regular', description='Campaign type')
     content_type: Literal['richtext', 'html', 'markdown', 'plain'] = Field(..., description='Content type')
-    body: str = Field(..., description='Content body of campaign')
+    body: Union[str, ChatwootCampaignBody] = Field(..., description='Content body of campaign')
     altbody: Optional[str] = Field(None, description='Alternate plain text body for HTML or richtext emails')
     send_at: Optional[datetime] = Field(None, description='Schedule timestamp (ISO 8601)')
     send_later: Optional[bool] = Field(None, description='Schedule for later')
     messenger: Optional[str] = Field('email', description="Messenger type, defaults to 'email'")
-    template_id: Optional[int] = Field(None, description='Template ID to use')
+    template_id: Optional[str] = Field(None, description='WhatsApp template ID (string); not forwarded to Listmonk')
     tags: Optional[List[str]] = Field(None, description='Tags to mark campaign')
     headers: Optional[List[Dict[str, str]]] = Field(None, description='SMTP headers as key-value pairs')
 
@@ -101,8 +199,8 @@ class LM_CampaignSchema(BaseModel):
     name: str
     subject: str
     from_email: str
-    type: str
-    content_type: str
+    type: Literal['regular', 'optin']
+    content_type: Literal['richtext', 'html', 'markdown', 'plain', 'visual']
     status: str
     body: Optional[str] = None
     altbody: Optional[str] = None
@@ -258,6 +356,19 @@ class ResponseCampaignSchema(BaseModel):
 
 
 # =============================================================================
+# CLIENT SCHEMAS
+# =============================================================================
+
+
+class ClientInfoSchema(BaseModel):
+    """Client record — ownership info returned by GET /v1/client."""
+
+    id: str
+    default_list: Optional[int] = None
+    lists: List[int]
+
+
+# =============================================================================
 # SUBSCRIBER IMPORT SCHEMAS
 # =============================================================================
 
@@ -265,7 +376,16 @@ class ResponseCampaignSchema(BaseModel):
 class ImportSubscriberItem(BaseModel):
     """A single subscriber entry for JSON bulk import."""
 
-    email: str
+    model_config = ConfigDict(
+        json_schema_extra={
+            'example': {
+                'email': 'subscriber@example.com',
+                'name': 'Jane Doe',
+            }
+        }
+    )
+
+    email: EmailStr
     name: str = ''
     attribs: Dict[str, Any] = {}
 

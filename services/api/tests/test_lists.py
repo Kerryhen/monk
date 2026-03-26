@@ -82,3 +82,10 @@ def test_get_lists(client, created_list):
     data = response.json()
     assert isinstance(data, list)
     assert any(lst['id'] == created_list['id'] for lst in data)
+
+
+def test_get_lists_unknown_client_returns_empty(client):
+    response = client.get('/v1/list', headers={'X-Instance-ID': 'never-registered-client'})
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.json() == []
