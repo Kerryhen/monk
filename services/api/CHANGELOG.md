@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.3](https://github.com/Kerryhen/monk/compare/monk-api-v0.4.2...monk-api-v0.4.3) (2026-03-26)
+
+
+### Bug Fixes
+
+* **api:** set default_list when existing default was cascade-deleted ([#34](https://github.com/Kerryhen/monk/issues/34)) ([869d401](https://github.com/Kerryhen/monk/commit/869d401f7afe18f7e3481d9f703045922a1823f5))
+
 ## [0.4.2](https://github.com/Kerryhen/monk/compare/monk-api-v0.4.1...monk-api-v0.4.2) (2026-03-26)
 
 
