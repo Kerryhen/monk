@@ -47,7 +47,12 @@ jobs:
       - name: Read version and normalize owner
         id: ver
         run: |
-          VERSION=$(grep '^version' services/api/pyproject.toml | sed 's/version = "//;s/"//')
+          if [[ "${{ github.event_name }}" == "release" ]]; then
+            TAG="${{ github.event.release.tag_name }}"
+            VERSION="${TAG#monk-api-v}"
+          else
+            VERSION=$(grep '^version' services/api/pyproject.toml | sed 's/version = "//;s/"//')
+          fi
           OWNER=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "owner=$OWNER" >> $GITHUB_OUTPUT
