@@ -95,6 +95,13 @@ class Interface:
         enrich_wide_event({'listmonk_error': {'status': response.status_code, 'detail': detail}})
         raise HTTPException(status_code=response.status_code, detail=detail)
 
+    def _monk_list_exists(self, list_id: str) -> bool:
+        try:
+            self.__pb.client.collection('monk_lists').get_one(list_id)
+            return True
+        except ClientResponseError:
+            return False
+
     def _get_client_list_ids(self, client_id: str) -> list[str]:
         result = self.__pb.client.collection('monk_client_lists').get_list(1, 1, {'filter': f'client="{client_id}"'})
         if result.total_items == 0:
@@ -148,7 +155,14 @@ class Interface:
         updates = {'lists': existing_lists + [list_id]}
         if not existing_lists:
             updates['default_list'] = list_id
-        self.__pb.client.collection('monk_client_lists').update(client_id, updates)
+        try:
+            self.__pb.client.collection('monk_client_lists').update(client_id, updates)
+        except ClientResponseError:
+            # Some existing list IDs are stale (deleted without PocketBase cleanup).
+            # Filter to valid IDs only and retry.
+            valid = [lid for lid in existing_lists if self._monk_list_exists(str(lid))]
+            updates['lists'] = valid + [list_id]
+            self.__pb.client.collection('monk_client_lists').update(client_id, updates)
 
         enrich_wide_event({
             'operation': 'create_list',
@@ -192,6 +206,10 @@ class Interface:
                     owner = result.items[0]
                     updated_lists = [lid for lid in owner.lists if str(lid) != str(_id)]
                     self.__pb.client.collection('monk_client_lists').update(owner.id, {'lists': updated_lists})
+            except ClientResponseError:
+                pass
+
+            try:
                 self.__pb.client.collection('monk_lists').delete(str(_id))
             except ClientResponseError:
                 pass
