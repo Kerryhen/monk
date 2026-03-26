@@ -135,6 +135,7 @@ class Interface:
         else:
             client_id = items[0].id
             existing_lists = items[0].lists
+            existing_default = items[0].default_list
 
         try:
             response = self.__monk.post(payload.list.model_dump())
@@ -153,7 +154,8 @@ class Interface:
 
         self.__pb.client.collection('monk_lists').create({'id': list_id})
         updates = {'lists': existing_lists + [list_id]}
-        if not existing_lists:
+        if not existing_lists or not existing_default:
+            # Fresh client or default was previously cascade-deleted — assign new list as default.
             updates['default_list'] = list_id
         try:
             self.__pb.client.collection('monk_client_lists').update(client_id, updates)
@@ -162,6 +164,9 @@ class Interface:
             # Filter to valid IDs only and retry.
             valid = [lid for lid in existing_lists if self._monk_list_exists(str(lid))]
             updates['lists'] = valid + [list_id]
+            if not valid:
+                # All existing lists were stale — no valid default remains, reset it.
+                updates['default_list'] = list_id
             self.__pb.client.collection('monk_client_lists').update(client_id, updates)
 
         enrich_wide_event({
