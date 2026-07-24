@@ -100,8 +100,10 @@ def chatwoot_session():
 
     def _post(url, *args, **kwargs):
         resp = MagicMock(ok=True)
-        if url.endswith('/contacts'):
-            resp.json.return_value = {'id': 42}
+        if url.endswith('/contact_inboxes'):
+            resp.json.return_value = {'payload': {'source_id': '5511999999999'}}
+        elif url.endswith('/contacts'):
+            resp.json.return_value = {'payload': {'contact': {'id': 42}}}  # Chatwoot's real create shape
         elif url.endswith('/conversations'):
             resp.json.return_value = {'id': 99}
         else:  # /labels (ensure + assign) and /messages
