@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.11.1](https://github.com/ailianbr/prospect/compare/monk-api-v0.11.0...monk-api-v0.11.1) (2026-07-24)
+
+
+### Bug Fixes
+
+* **api:** open WhatsApp conversations for brand-new contacts (contact_inbox + source_id) ([2770573](https://github.com/ailianbr/prospect/commit/27705737022b7f4282b64cd54b6a83970115f4e5))
+* **api:** open WhatsApp conversations for brand-new contacts (contact_inbox + source_id) ([91ed056](https://github.com/ailianbr/prospect/commit/91ed056ef97acd305547652d488b61c0199c05bc))
+
 ## [0.11.0](https://github.com/ailianbr/prospect/compare/monk-api-v0.10.1...monk-api-v0.11.0) (2026-07-24)
 
 
