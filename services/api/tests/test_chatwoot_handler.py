@@ -11,17 +11,19 @@ from app.handlers.chatwoot.handler import (
     CampaignCtx,
     ChatwootHandler,
     _campaign_labels,  # noqa: PLC2701
+    _contact_id_from_create,  # noqa: PLC2701
     _render_content,  # noqa: PLC2701
     _slug,  # noqa: PLC2701
+    _wa_source_id,  # noqa: PLC2701
 )
 from app.handlers.chatwoot.schemas import ChatwootCampaignBody, ChatwootTemplateConfig
 from app.handlers.resolver import DefaultVariableResolver
 from app.schemas import MessengerCampaignMeta, MessengerPayload, MessengerRecipient
 
-# --- constants for call counts ---
-CHATWOOT_CALLS_NEW_CONTACT = 4  # contact_create + conversation + labels + message
-CHATWOOT_CALLS_EXIST_CONTACT = 3  # conversation + labels + message (contact found in search)
-CHATWOOT_CALLS_CONVERSATION_FAILED = 2  # contact create + failed conversation (stops before labels)
+# --- constants for POST call counts ---
+CHATWOOT_CALLS_NEW_CONTACT = 5  # contact_create + contact_inbox + conversation + labels + message
+CHATWOOT_CALLS_EXIST_CONTACT = 3  # conversation + labels + message (found contact already linked)
+CHATWOOT_CALLS_CONVERSATION_FAILED = 3  # contact + contact_inbox + failed conversation (stops before labels)
 
 # --------------------------------------------------------------------------- #
 # Shared test data
@@ -111,22 +113,46 @@ def mock_pb():
     return MagicMock()
 
 
-def _make_http_session(contact_id=42, conversation_id=99, contact_exists=False):
-    """Return a mock requests.Session configured for a successful Chatwoot flow."""
+def _make_http_session(contact_id=42, conversation_id=99, contact_exists=False, has_contact_inbox=True, fail_on=None):
+    """URL-keyed mock requests.Session for the Chatwoot flow — robust to call order and count.
+
+    `contact_exists`: the search returns a hit. `has_contact_inbox`: that existing contact already
+    has a contact_inbox on the target inbox. `fail_on`: an endpoint suffix (e.g. 'conversations')
+    whose POST returns not-ok. `POST /contacts` uses Chatwoot's real `payload.contact` shape."""
     session = MagicMock()
+    inbox_id = CHATWOOT_CONFIG['inbox_id']
 
-    search_resp = MagicMock(ok=True)
-    search_resp.json.return_value = {'payload': [{'id': contact_id}] if contact_exists else []}
-    session.get.return_value = search_resp
+    def _resp(ok=True):
+        r = MagicMock(ok=ok)
+        r.status_code = 200 if ok else 500
+        r.text = '' if ok else 'error'
+        return r
 
-    create_contact = MagicMock(ok=True)
-    create_contact.json.return_value = {'id': contact_id}
-    create_conv = MagicMock(ok=True)
-    create_conv.json.return_value = {'id': conversation_id}
-    labels_resp = MagicMock(ok=True)
-    send_msg = MagicMock(ok=True)
-    session.post.side_effect = [create_contact, create_conv, labels_resp, send_msg]
+    def _get(url, *args, **kwargs):
+        r = _resp()
+        if url.endswith('/contacts/search'):
+            r.json.return_value = {'payload': [{'id': contact_id}] if contact_exists else []}
+        elif url.rstrip('/').endswith(f'/contacts/{contact_id}'):
+            cis = [{'source_id': str(contact_id), 'inbox': {'id': inbox_id}}] if has_contact_inbox else []
+            r.json.return_value = {'payload': {'contact_inboxes': cis}}
+        else:
+            r.json.return_value = {'payload': []}
+        return r
 
+    def _post(url, *args, **kwargs):
+        r = _resp(ok=not (fail_on and url.endswith('/' + fail_on)))
+        if url.endswith('/contact_inboxes'):
+            r.json.return_value = {'payload': {'source_id': str(contact_id)}}
+        elif url.endswith('/contacts'):
+            r.json.return_value = {'payload': {'contact': {'id': contact_id}}}
+        elif url.endswith('/conversations'):
+            r.json.return_value = {'id': conversation_id}
+        else:  # /labels and /messages
+            r.json.return_value = {}
+        return r
+
+    session.get.side_effect = _get
+    session.post.side_effect = _post
     return session
 
 
@@ -169,6 +195,68 @@ def test_process_one_uses_existing_contact(handler, recipient, ctx):
 
     assert result is True
     assert session.post.call_count == CHATWOOT_CALLS_EXIST_CONTACT
+
+
+# --------------------------------------------------------------------------- #
+# _process_one — WhatsApp contact_inbox / source_id (cold-lead conversation fix)
+# --------------------------------------------------------------------------- #
+
+WA_ID = '5511999999999'  # recipient fixture phone (+5511999999999) as a wa_id (digits only)
+
+
+def test_new_contact_creates_contact_inbox_and_conversation_carries_source_id(handler, recipient, ctx):
+    """A brand-new WhatsApp contact must get a contact_inbox (source_id = wa_id) and the conversation
+    must be opened against that source_id — otherwise Chatwoot can't open it (the cold-lead bug)."""
+    session = _make_http_session(contact_id=42, conversation_id=99)
+
+    result = handler._process_one(recipient, ctx, session)
+
+    assert result is True
+    ci_calls = [c for c in session.post.call_args_list if c.args[0].endswith('/contacts/42/contact_inboxes')]
+    assert ci_calls, 'expected a contact_inbox POST for a brand-new WhatsApp contact'
+    assert ci_calls[0].kwargs['json'] == {'inbox_id': ctx.config['inbox_id'], 'source_id': WA_ID}
+    conv_call = next(c for c in session.post.call_args_list if c.args[0].endswith('/conversations'))
+    assert conv_call.kwargs['json'].get('source_id') == WA_ID
+
+
+def test_existing_contact_with_inbox_omits_source_id(handler, recipient, ctx):
+    """Regression guard for the 0.10.0 breakage: a contact already linked to the inbox is reused
+    as-is — no contact_inbox POST and no forced source_id (which would collide on uniqueness)."""
+    session = _make_http_session(contact_id=42, conversation_id=99, contact_exists=True, has_contact_inbox=True)
+
+    result = handler._process_one(recipient, ctx, session)
+
+    assert result is True
+    assert not [c for c in session.post.call_args_list if c.args[0].endswith('/contact_inboxes')]
+    conv_call = next(c for c in session.post.call_args_list if c.args[0].endswith('/conversations'))
+    assert 'source_id' not in conv_call.kwargs['json']
+
+
+def test_existing_contact_without_inbox_creates_link(handler, recipient, ctx):
+    """An existing contact with no contact_inbox on this inbox (e.g. one created by an earlier failed
+    send) gets the link created and the conversation carries the source_id."""
+    session = _make_http_session(contact_id=42, conversation_id=99, contact_exists=True, has_contact_inbox=False)
+
+    result = handler._process_one(recipient, ctx, session)
+
+    assert result is True
+    ci_calls = [c for c in session.post.call_args_list if c.args[0].endswith('/contacts/42/contact_inboxes')]
+    assert ci_calls
+    assert ci_calls[0].kwargs['json']['source_id'] == WA_ID
+    conv_call = next(c for c in session.post.call_args_list if c.args[0].endswith('/conversations'))
+    assert conv_call.kwargs['json'].get('source_id') == WA_ID
+
+
+def test_contact_inbox_collision_falls_back_to_no_source_id(handler, recipient, ctx):
+    """If the contact_inbox POST fails (e.g. wa_id already tied to another contact), the send must
+    not force a colliding source_id — it falls back to opening the conversation without one."""
+    session = _make_http_session(contact_id=42, conversation_id=99, fail_on='contact_inboxes')
+
+    result = handler._process_one(recipient, ctx, session)
+
+    assert result is True
+    conv_call = next(c for c in session.post.call_args_list if c.args[0].endswith('/conversations'))
+    assert 'source_id' not in conv_call.kwargs['json']
 
 
 # --------------------------------------------------------------------------- #
@@ -217,15 +305,12 @@ def test_process_one_skips_when_contact_create_fails(handler, recipient, ctx):
 
 
 def test_process_one_skips_when_conversation_fails(handler, recipient, ctx):
-    session = MagicMock()
-    session.get.return_value = MagicMock(ok=True, json=lambda: {'payload': []})
-    ok_contact = MagicMock(ok=True, json=lambda: {'id': 42})
-    fail_conv = MagicMock(ok=False)
-    session.post.side_effect = [ok_contact, fail_conv]
+    session = _make_http_session(fail_on='conversations')
 
     result = handler._process_one(recipient, ctx, session)
 
     assert result is False
+    # contact create + contact_inbox + failed conversation, then stops (no labels/message)
     assert session.post.call_count == CHATWOOT_CALLS_CONVERSATION_FAILED
 
 
@@ -443,17 +528,13 @@ def test_process_one_tags_conversation_with_campaign_labels(handler, recipient, 
 
 
 def test_process_one_label_failure_is_non_fatal(handler, recipient, ctx):
-    session = _make_http_session(contact_id=42, conversation_id=99)
-    create_contact = MagicMock(ok=True, json=lambda: {'id': 42})
-    create_conv = MagicMock(ok=True, json=lambda: {'id': 99})
-    labels_fail = MagicMock(ok=False, status_code=422, text='nope')
-    send_msg = MagicMock(ok=True)
-    session.post.side_effect = [create_contact, create_conv, labels_fail, send_msg]
+    session = _make_http_session(contact_id=42, conversation_id=99, fail_on='labels')
 
     result = handler._process_one(recipient, ctx, session)
 
     assert result is True  # a labels failure must not block the message send
     assert session.post.call_count == CHATWOOT_CALLS_NEW_CONTACT
+    assert any(c.args[0].endswith('/messages') for c in session.post.call_args_list)
 
 
 def test_ensure_labels_creates_account_labels_idempotently(handler):
@@ -535,3 +616,28 @@ def test_fetch_template_body_missing_returns_empty(handler):
     session = MagicMock()
     session.get.return_value = MagicMock(ok=True, json=lambda: {'payload': []})
     assert not handler._fetch_template_body(session, CHATWOOT_CONFIG, 'nope')
+
+
+# --------------------------------------------------------------------------- #
+# WhatsApp source_id helpers
+# --------------------------------------------------------------------------- #
+
+
+def test_wa_source_id_strips_non_digits():
+    assert _wa_source_id('+55 41 98461-2903') == '5541984612903'
+    assert _wa_source_id('+5511999999999') == '5511999999999'
+    assert not _wa_source_id('')
+    assert not _wa_source_id(None)  # type: ignore[arg-type]
+
+
+def test_contact_id_from_create_handles_chatwoot_shapes():
+    cid = 7
+    # Chatwoot's real POST /contacts response wraps the contact under payload.contact
+    assert _contact_id_from_create({'payload': {'contact': {'id': cid}}}) == cid
+    # tolerate flat/alternate shapes so a version change can't silently return None
+    assert _contact_id_from_create({'payload': {'id': cid}}) == cid
+    assert _contact_id_from_create({'id': cid}) == cid
+    # unparsable -> None (caller logs create_contact_failed and skips the recipient)
+    assert _contact_id_from_create({'payload': {'contact': {}}}) is None
+    assert _contact_id_from_create({}) is None
+    assert _contact_id_from_create('nope') is None

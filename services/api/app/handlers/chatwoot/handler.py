@@ -68,6 +68,29 @@ def _template_body_text(template: dict) -> str:
     return ''
 
 
+def _wa_source_id(phone: str) -> str:
+    """Chatwoot's WhatsApp Cloud `source_id` is the wa_id — the phone number's digits only, no `+`
+    (e.g. `+55 41 98461-2903` -> `5541984612903`). It links a contact to the inbox and is what an
+    outbound conversation is opened against."""
+    return re.sub(r'\D', '', phone or '')
+
+
+def _contact_id_from_create(body: object) -> int | None:
+    """Extract the contact id from Chatwoot's `POST /contacts` response, which wraps the new contact
+    under `payload.contact`. A flat `{id}` shape is tolerated too, so a Chatwoot version change can't
+    silently make contact creation return None (the bug that dropped every cold-lead send)."""
+    if not isinstance(body, dict):
+        return None
+    payload = body.get('payload')
+    if isinstance(payload, dict):
+        contact = payload.get('contact')
+        if isinstance(contact, dict) and contact.get('id') is not None:
+            return contact['id']
+        if payload.get('id') is not None:
+            return payload['id']
+    return body.get('id')
+
+
 def fetch_chatwoot_config(pb, instance_id: str, handler: str, channel: str) -> dict | None:
     """Assemble Chatwoot connection config from multiple PocketBase collections.
 
@@ -172,9 +195,20 @@ class ChatwootHandler(MessengerHandlerBase):
     def _headers(api_token: str) -> dict:
         return {'api_access_token': api_token, 'Content-Type': 'application/json'}
 
-    def _find_or_create_contact(self, session: requests.Session, config: dict, phone: str, name: str) -> int | None:
+    def _find_or_create_contact(
+        self, session: requests.Session, config: dict, phone: str, name: str
+    ) -> tuple[int, str | None] | None:
+        """Resolve a Chatwoot contact for `phone` and the WhatsApp `source_id` a conversation needs.
+
+        Returns `(contact_id, source_id)` or None on failure. A brand-new WhatsApp contact has no
+        `contact_inbox`, so Chatwoot can't open a conversation for it — we create the contact_inbox
+        with `source_id = wa_id`. An existing contact that already has a contact_inbox on this inbox
+        is reused as-is (source_id None -> conversation opened without one), which preserves the
+        proven-working path and avoids the `(inbox_id, source_id)` uniqueness collision that forcing
+        a wa_id caused before (the 0.10.0 regression)."""
         base = f'{config["url"].rstrip("/")}/api/v1/accounts/{config["account_id"]}'
         headers = self._headers(config['api_token_handler'])
+        wa_id = _wa_source_id(phone)
 
         resp = session.get(
             f'{base}/contacts/search',
@@ -182,12 +216,19 @@ class ChatwootHandler(MessengerHandlerBase):
             headers=headers,
             timeout=10,
         )
+        contact_id = None
         if resp.ok:
             results = resp.json().get('payload', [])
             if results:
-                return results[0]['id']
+                contact_id = results[0]['id']
         else:
             logger.warning('chatwoot.contact_search_failed', extra={'status': resp.status_code, 'body': resp.text[:500]})
+
+        if contact_id is not None:
+            if self._has_contact_inbox(session, config, contact_id):
+                return contact_id, None
+            ok = self._ensure_contact_inbox(session, config, contact_id, wa_id)
+            return contact_id, (wa_id if ok else None)
 
         resp = session.post(
             f'{base}/contacts',
@@ -198,13 +239,65 @@ class ChatwootHandler(MessengerHandlerBase):
         if not resp.ok:
             logger.error('chatwoot.create_contact_failed', extra={'status': resp.status_code, 'body': resp.text[:500]})
             return None
-        return resp.json().get('id')
+        contact_id = _contact_id_from_create(resp.json())
+        if contact_id is None:
+            logger.error(
+                'chatwoot.create_contact_failed', extra={'reason': 'unparsable_response', 'body': str(resp.json())[:500]}
+            )
+            return None
+        ok = self._ensure_contact_inbox(session, config, contact_id, wa_id)
+        return contact_id, (wa_id if ok else None)
 
-    def _create_conversation(self, session: requests.Session, config: dict, contact_id: int) -> int | None:
+    def _has_contact_inbox(self, session: requests.Session, config: dict, contact_id: int) -> bool:
+        """True if the contact already has a contact_inbox on the target WhatsApp inbox (so a
+        conversation opens without forcing a source_id). Best-effort: on any error assume it does,
+        preserving the prior no-source_id behavior rather than risking a duplicate contact_inbox."""
         base = f'{config["url"].rstrip("/")}/api/v1/accounts/{config["account_id"]}'
+        try:
+            resp = session.get(f'{base}/contacts/{contact_id}', headers=self._headers(config['api_token_handler']), timeout=10)
+        except requests.RequestException:
+            return True
+        if not resp.ok:
+            return True
+        contact = resp.json().get('payload', {}) or {}
+        for ci in contact.get('contact_inboxes', []) or []:
+            if (ci.get('inbox') or {}).get('id') == config['inbox_id']:
+                return True
+        return False
+
+    def _ensure_contact_inbox(self, session: requests.Session, config: dict, contact_id: int, source_id: str) -> bool:
+        """Link the contact to the WhatsApp inbox with its wa_id so a conversation can be opened.
+        Returns True if the link exists/was created. Non-fatal: a 422 (source_id already tied to
+        another contact) or any error returns False and the caller falls back to no source_id."""
+        base = f'{config["url"].rstrip("/")}/api/v1/accounts/{config["account_id"]}'
+        try:
+            resp = session.post(
+                f'{base}/contacts/{contact_id}/contact_inboxes',
+                json={'inbox_id': config['inbox_id'], 'source_id': source_id},
+                headers=self._headers(config['api_token_handler']),
+                timeout=10,
+            )
+        except requests.RequestException as e:
+            logger.warning('chatwoot.contact_inbox_failed', extra={'error': str(e), 'contact_id': contact_id})
+            return False
+        if resp.ok:
+            return True
+        logger.warning(
+            'chatwoot.contact_inbox_failed',
+            extra={'status': resp.status_code, 'body': resp.text[:300], 'contact_id': contact_id},
+        )
+        return False
+
+    def _create_conversation(
+        self, session: requests.Session, config: dict, contact_id: int, source_id: str | None = None
+    ) -> int | None:
+        base = f'{config["url"].rstrip("/")}/api/v1/accounts/{config["account_id"]}'
+        body = {'inbox_id': config['inbox_id'], 'contact_id': contact_id}
+        if source_id:
+            body['source_id'] = source_id
         resp = session.post(
             f'{base}/conversations',
-            json={'inbox_id': config['inbox_id'], 'contact_id': contact_id},
+            json=body,
             headers=self._headers(config['api_token_handler']),
             timeout=10,
         )
@@ -364,11 +457,12 @@ class ChatwootHandler(MessengerHandlerBase):
             logger.warning('chatwoot.skip_recipient', extra={**log_ctx, 'reason': 'missing:phone'})
             return False
 
-        contact_id = self._find_or_create_contact(session, ctx.config, str(phone), recipient.name)
-        if contact_id is None:
+        contact = self._find_or_create_contact(session, ctx.config, str(phone), recipient.name)
+        if contact is None:
             return False
+        contact_id, source_id = contact
 
-        conversation_id = self._create_conversation(session, ctx.config, contact_id)
+        conversation_id = self._create_conversation(session, ctx.config, contact_id, source_id)
         if conversation_id is None:
             return False
 
